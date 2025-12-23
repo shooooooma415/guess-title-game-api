@@ -1,27 +1,24 @@
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 -- Create ENUM types
 CREATE TYPE room_status AS ENUM ('waiting', 'setting_topic', 'discussing', 'answering', 'checking', 'finished');
 CREATE TYPE participant_role AS ENUM ('host', 'player');
 
 -- Create User table
 CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create Theme table
 CREATE TABLE themes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     hint TEXT
 );
 
 -- Create Room table
 CREATE TABLE rooms (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY,
     code VARCHAR(50) NOT NULL UNIQUE,
     theme_id UUID NOT NULL,
     topic TEXT,
@@ -36,7 +33,7 @@ CREATE TABLE rooms (
 
 -- Create Participant table
 CREATE TABLE participants (
-    id UUID NOT NULL DEFAULT uuid_generate_v4(),
+    id UUID NOT NULL,
     room_id UUID NOT NULL,
     user_id UUID NOT NULL,
     role participant_role NOT NULL,
@@ -49,7 +46,7 @@ CREATE TABLE participants (
 
 -- Create Room_Emoji table
 CREATE TABLE room_emojis (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY,
     room_id UUID NOT NULL,
     participant_id UUID,
     emoji VARCHAR(50) NOT NULL,

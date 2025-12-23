@@ -8,6 +8,3 @@ DROP TABLE IF EXISTS users;
 -- Drop ENUM types
 DROP TYPE IF EXISTS participant_role;
 DROP TYPE IF EXISTS room_status;
-
--- Drop UUID extension
-DROP EXTENSION IF EXISTS "uuid-ossp";
