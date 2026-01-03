@@ -10,6 +10,7 @@ import (
 
 var (
 	ErrInvalidStatusTransition = errors.New("invalid status transition")
+	ErrInvalidStatus           = errors.New("invalid room status")
 )
 
 // RoomID represents a room identifier
@@ -136,8 +137,32 @@ func NewRoomStatusFromString(value string) (RoomStatus, error) {
 	case "finished":
 		return StatusFinished, nil
 	default:
-		return 0, errors.New("invalid room status")
+		return 0, ErrInvalidStatus
 	}
+}
+
+// CanTransitionTo checks if the current status can transition to the target status
+func (s RoomStatus) CanTransitionTo(target RoomStatus) bool {
+	validTransitions := map[RoomStatus][]RoomStatus{
+		StatusWaiting:      {StatusSettingTopic},
+		StatusSettingTopic: {StatusDiscussing},
+		StatusDiscussing:   {StatusAnswering},
+		StatusAnswering:    {StatusChecking},
+		StatusChecking:     {StatusFinished},
+		StatusFinished:     {},
+	}
+
+	allowedTargets, exists := validTransitions[s]
+	if !exists {
+		return false
+	}
+
+	for _, allowed := range allowedTargets {
+		if allowed == target {
+			return true
+		}
+	}
+	return false
 }
 
 // Topic represents a room topic

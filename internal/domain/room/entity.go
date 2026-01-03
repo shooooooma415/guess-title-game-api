@@ -137,9 +137,11 @@ func (r *Room) Start() error {
 	return nil
 }
 
-// ChangeStatus changes the room status
+// ChangeStatus changes the room status with validation
 func (r *Room) ChangeStatus(status RoomStatus) error {
-	// TODO: Add status transition validation logic
+	if !r.status.CanTransitionTo(status) {
+		return ErrInvalidStatusTransition
+	}
 	r.status = status
 	return nil
 }
