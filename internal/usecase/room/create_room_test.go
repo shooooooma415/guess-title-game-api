@@ -12,7 +12,7 @@ import (
 	roomUseCase "github.com/shooooooma415/guess-title-game-api/internal/usecase/room"
 )
 
-func TestCreateRoomUseCase_Execute(t *testing.T) {
+func TestCreateRoomUseCaseExecute(t *testing.T) {
 	type fixture struct {
 		useCase         *roomUseCase.CreateRoomUseCase
 		userRepo        *mockUserRepository
