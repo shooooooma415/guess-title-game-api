@@ -39,8 +39,31 @@ gcloud services enable \
 
 ### 2.1 Cloud SQLインスタンスの作成
 
+個人利用向けの最小構成（月額 $5-7程度）：
+
 ```bash
-# 本番環境用（推奨）
+# 最小構成（個人利用・開発環境向け）
+gcloud sql instances create guess-title-game-db \
+  --database-version=POSTGRES_16 \
+  --tier=db-f1-micro \
+  --region=asia-northeast1 \
+  --storage-type=HDD \
+  --storage-size=10GB \
+  --no-backup \
+  --activation-policy=ALWAYS
+```
+
+**コスト削減のヒント:**
+```bash
+# 使わない時はインスタンスを停止（ストレージ料金のみ $1-2/月）
+gcloud sql instances patch guess-title-game-db --activation-policy NEVER
+
+# 再起動する時
+gcloud sql instances patch guess-title-game-db --activation-policy ALWAYS
+```
+
+**本番環境用（推奨）:**
+```bash
 gcloud sql instances create guess-title-game-db \
   --database-version=POSTGRES_16 \
   --tier=db-g1-small \
@@ -49,12 +72,6 @@ gcloud sql instances create guess-title-game-db \
   --storage-size=10GB \
   --backup \
   --backup-start-time=03:00
-
-# 開発/テスト環境用（コスト削減）
-gcloud sql instances create guess-title-game-db \
-  --database-version=POSTGRES_16 \
-  --tier=db-f1-micro \
-  --region=asia-northeast1
 ```
 
 ### 2.2 データベースの作成
