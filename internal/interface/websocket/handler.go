@@ -267,11 +267,16 @@ func (h *Handler) handleSubmitTopic(client *Client, payload interface{}) {
 	}
 
 	// Save game data
+	originalEmojis := room.NewEmojiList(data.OriginalEmojis)
+	displayedEmojis := room.NewEmojiList(data.DisplayedEmojis)
+	dummyIndex, _ := room.NewDummyIndex(data.DummyIndex)
+	dummyEmoji, _ := room.NewDummyEmoji(data.DummyEmoji)
+
 	foundRoom.SetGameData(
-		data.OriginalEmojis,
-		data.DisplayedEmojis,
-		data.DummyIndex,
-		data.DummyEmoji,
+		originalEmojis,
+		displayedEmojis,
+		dummyIndex,
+		dummyEmoji,
 	)
 
 	if err := h.roomRepo.Save(ctx, foundRoom); err != nil {
@@ -284,18 +289,48 @@ func (h *Handler) handleSubmitTopic(client *Client, payload interface{}) {
 	h.roomRepo.Save(ctx, foundRoom)
 
 	// Broadcast state update
-	dummyIdx := foundRoom.DummyIndex()
+	topicStr := ""
+	if foundRoom.Topic() != nil {
+		topicStr = foundRoom.Topic().String()
+	}
+
+	var dummyIdxPtr *int
+	if foundRoom.DummyIndex() != nil {
+		val := foundRoom.DummyIndex().Value()
+		dummyIdxPtr = &val
+	}
+
+	dummyEmojiStr := ""
+	if foundRoom.DummyEmoji() != nil {
+		dummyEmojiStr = foundRoom.DummyEmoji().String()
+	}
+
+	displayedEmojisSlice := []string{}
+	if foundRoom.DisplayedEmojis() != nil {
+		displayedEmojisSlice = foundRoom.DisplayedEmojis().Values()
+	}
+
+	originalEmojisSlice := []string{}
+	if foundRoom.OriginalEmojis() != nil {
+		originalEmojisSlice = foundRoom.OriginalEmojis().Values()
+	}
+
+	assignmentsSlice := []string{}
+	if foundRoom.Assignments() != nil {
+		assignmentsSlice = foundRoom.Assignments().Values()
+	}
+
 	h.hub.Broadcast(client.roomID, Message{
 		Type: MessageTypeStateUpdate,
 		Payload: StateUpdatePayload{
 			NextState: "discussing",
 			Data: &StateUpdateDataPayload{
-				Topic:           foundRoom.Topic(),
-				DisplayedEmojis: foundRoom.DisplayedEmojis(),
-				OriginalEmojis:  foundRoom.OriginalEmojis(),
-				DummyIndex:      dummyIdx,
-				DummyEmoji:      foundRoom.DummyEmoji(),
-				Assignments:     foundRoom.Assignments(),
+				Topic:           topicStr,
+				DisplayedEmojis: displayedEmojisSlice,
+				OriginalEmojis:  originalEmojisSlice,
+				DummyIndex:      dummyIdxPtr,
+				DummyEmoji:      dummyEmojiStr,
+				Assignments:     assignmentsSlice,
 			},
 		},
 	})
@@ -329,12 +364,19 @@ func (h *Handler) handleAnswering(client *Client, payload interface{}) {
 	}
 
 	// Save all data
-	foundRoom.SetAnswer(data.Answer)
+	answer, _ := room.NewAnswer(data.Answer)
+	foundRoom.SetAnswer(answer)
+
+	originalEmojis := room.NewEmojiList(data.OriginalEmojis)
+	displayedEmojis := room.NewEmojiList(data.DisplayedEmojis)
+	dummyIndex, _ := room.NewDummyIndex(data.DummyIndex)
+	dummyEmoji, _ := room.NewDummyEmoji(data.DummyEmoji)
+
 	foundRoom.SetGameData(
-		data.OriginalEmojis,
-		data.DisplayedEmojis,
-		data.DummyIndex,
-		data.DummyEmoji,
+		originalEmojis,
+		displayedEmojis,
+		dummyIndex,
+		dummyEmoji,
 	)
 	foundRoom.ChangeStatus(room.StatusChecking)
 
@@ -344,18 +386,48 @@ func (h *Handler) handleAnswering(client *Client, payload interface{}) {
 	}
 
 	// Broadcast state update to checking
-	dummyIdx := foundRoom.DummyIndex()
+	topicStr := ""
+	if foundRoom.Topic() != nil {
+		topicStr = foundRoom.Topic().String()
+	}
+
+	var dummyIdxPtr *int
+	if foundRoom.DummyIndex() != nil {
+		val := foundRoom.DummyIndex().Value()
+		dummyIdxPtr = &val
+	}
+
+	dummyEmojiStr := ""
+	if foundRoom.DummyEmoji() != nil {
+		dummyEmojiStr = foundRoom.DummyEmoji().String()
+	}
+
+	displayedEmojisSlice2 := []string{}
+	if foundRoom.DisplayedEmojis() != nil {
+		displayedEmojisSlice2 = foundRoom.DisplayedEmojis().Values()
+	}
+
+	originalEmojisSlice2 := []string{}
+	if foundRoom.OriginalEmojis() != nil {
+		originalEmojisSlice2 = foundRoom.OriginalEmojis().Values()
+	}
+
+	assignmentsSlice2 := []string{}
+	if foundRoom.Assignments() != nil {
+		assignmentsSlice2 = foundRoom.Assignments().Values()
+	}
+
 	h.hub.Broadcast(client.roomID, Message{
 		Type: MessageTypeStateUpdate,
 		Payload: StateUpdatePayload{
 			NextState: "checking",
 			Data: &StateUpdateDataPayload{
-				Topic:           foundRoom.Topic(),
-				DisplayedEmojis: foundRoom.DisplayedEmojis(),
-				OriginalEmojis:  foundRoom.OriginalEmojis(),
-				DummyIndex:      dummyIdx,
-				DummyEmoji:      foundRoom.DummyEmoji(),
-				Assignments:     foundRoom.Assignments(),
+				Topic:           topicStr,
+				DisplayedEmojis: displayedEmojisSlice2,
+				OriginalEmojis:  originalEmojisSlice2,
+				DummyIndex:      dummyIdxPtr,
+				DummyEmoji:      dummyEmojiStr,
+				Assignments:     assignmentsSlice2,
 			},
 		},
 	})

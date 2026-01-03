@@ -91,6 +91,6 @@ func (uc *CreateRoomUseCase) Execute(ctx context.Context) (*CreateRoomOutput, er
 		UserID:   hostUserID.String(),
 		RoomCode: roomCode.String(),
 		Theme:    selectedTheme.Title().String(),
-		Hint:     selectedTheme.Hint(),
+		Hint:     selectedTheme.Hint().String(),
 	}, nil
 }

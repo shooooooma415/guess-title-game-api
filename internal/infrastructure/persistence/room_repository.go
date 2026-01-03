@@ -40,23 +40,55 @@ func (r *RoomRepository) Save(ctx context.Context, rm *room.Room) error {
 			assignments = EXCLUDED.assignments
 	`
 
+	// Convert VOs to primitive values
+	var topicStr, answerStr interface{}
+	if rm.Topic() != nil {
+		topicStr = rm.Topic().String()
+	}
+	if rm.Answer() != nil {
+		answerStr = rm.Answer().String()
+	}
+
+	var originalEmojis, displayedEmojis []string
+	if rm.OriginalEmojis() != nil {
+		originalEmojis = rm.OriginalEmojis().Values()
+	}
+	if rm.DisplayedEmojis() != nil {
+		displayedEmojis = rm.DisplayedEmojis().Values()
+	}
+
+	var dummyIndex interface{}
+	if rm.DummyIndex() != nil {
+		dummyIndex = rm.DummyIndex().Value()
+	}
+
+	var dummyEmoji interface{}
+	if rm.DummyEmoji() != nil {
+		dummyEmoji = rm.DummyEmoji().String()
+	}
+
+	var assignments []string
+	if rm.Assignments() != nil {
+		assignments = rm.Assignments().Values()
+	}
+
 	_, err := r.db.ExecContext(
 		ctx,
 		query,
 		rm.ID().String(),
 		rm.Code().String(),
 		rm.ThemeID().String(),
-		rm.Topic(),
-		rm.Answer(),
+		topicStr,
+		answerStr,
 		rm.Status().String(),
 		rm.HostUserID().String(),
 		rm.CreatedAt(),
 		rm.StartedAt(),
-		pq.Array(rm.OriginalEmojis()),
-		pq.Array(rm.DisplayedEmojis()),
-		rm.DummyIndex(),
-		rm.DummyEmoji(),
-		pq.Array(rm.Assignments()),
+		pq.Array(originalEmojis),
+		pq.Array(displayedEmojis),
+		dummyIndex,
+		dummyEmoji,
+		pq.Array(assignments),
 	)
 
 	return err
@@ -129,26 +161,29 @@ func (r *RoomRepository) scanRoom(ctx context.Context, query string, arg interfa
 	rm := room.NewRoom(roomID, roomCode, roomThemeID, roomHostUserID)
 
 	if topic.Valid {
-		rm.SetTopic(topic.String)
+		if t, err := room.NewTopic(topic.String); err == nil {
+			rm.SetTopic(t)
+		}
 	}
 	if answer.Valid {
-		rm.SetAnswer(answer.String)
+		if a, err := room.NewAnswer(answer.String); err == nil {
+			rm.SetAnswer(a)
+		}
 	}
 
 	roomStatus, _ := room.NewRoomStatusFromString(status)
 	rm.ChangeStatus(roomStatus)
 
 	if len(originalEmojis) > 0 && len(displayedEmojis) > 0 && dummyIndex.Valid {
-		rm.SetGameData(
-			originalEmojis,
-			displayedEmojis,
-			int(dummyIndex.Int64),
-			dummyEmoji.String,
-		)
+		origEmojis := room.NewEmojiList(originalEmojis)
+		dispEmojis := room.NewEmojiList(displayedEmojis)
+		dummyIdx, _ := room.NewDummyIndex(int(dummyIndex.Int64))
+		dummyEmo, _ := room.NewDummyEmoji(dummyEmoji.String)
+		rm.SetGameData(origEmojis, dispEmojis, dummyIdx, dummyEmo)
 	}
 
 	if len(assignments) > 0 {
-		rm.SetAssignments(assignments)
+		rm.SetAssignments(room.NewAssignments(assignments))
 	}
 
 	return rm, nil

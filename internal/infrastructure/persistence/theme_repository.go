@@ -33,7 +33,7 @@ func (r *ThemeRepository) Save(ctx context.Context, t *theme.Theme) error {
 		query,
 		t.ID().String(),
 		t.Title().String(),
-		t.Hint(),
+		t.Hint().String(),
 	)
 
 	return err
@@ -68,8 +68,9 @@ func (r *ThemeRepository) FindByID(ctx context.Context, id theme.ThemeID) (*them
 	if hint.Valid {
 		hintStr = hint.String
 	}
+	hintVO := theme.NewHint(hintStr)
 
-	return theme.NewTheme(tid, themeTitle, hintStr), nil
+	return theme.NewTheme(tid, themeTitle, hintVO), nil
 }
 
 // FindAll retrieves all themes
@@ -105,8 +106,9 @@ func (r *ThemeRepository) FindAll(ctx context.Context) ([]*theme.Theme, error) {
 		if hint.Valid {
 			hintStr = hint.String
 		}
+		hintVO := theme.NewHint(hintStr)
 
-		themes = append(themes, theme.NewTheme(tid, themeTitle, hintStr))
+		themes = append(themes, theme.NewTheme(tid, themeTitle, hintVO))
 	}
 
 	return themes, rows.Err()

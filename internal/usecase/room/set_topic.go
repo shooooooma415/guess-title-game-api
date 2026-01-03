@@ -60,7 +60,11 @@ func (uc *SetTopicUseCase) Execute(ctx context.Context, input SetTopicInput) err
 	}
 
 	// Set topic
-	if err := foundRoom.SetTopic(input.Topic); err != nil {
+	topic, err := room.NewTopic(input.Topic)
+	if err != nil {
+		return err
+	}
+	if err := foundRoom.SetTopic(topic); err != nil {
 		return err
 	}
 

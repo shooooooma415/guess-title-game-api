@@ -59,7 +59,11 @@ func (uc *SubmitAnswerUseCase) Execute(ctx context.Context, input SubmitAnswerIn
 	}
 
 	// Set answer
-	if err := foundRoom.SetAnswer(input.Answer); err != nil {
+	answer, err := room.NewAnswer(input.Answer)
+	if err != nil {
+		return err
+	}
+	if err := foundRoom.SetAnswer(answer); err != nil {
 		return err
 	}
 
