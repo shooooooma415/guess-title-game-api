@@ -1,12 +1,16 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
+	"github.com/shooooooma415/guess-title-game-api/internal/domain/participant"
+	"github.com/shooooooma415/guess-title-game-api/internal/domain/room"
+	"github.com/shooooooma415/guess-title-game-api/internal/domain/user"
 )
 
 var upgrader = websocket.Upgrader{
@@ -107,13 +111,27 @@ func (h *Hub) Broadcast(roomID string, message Message) {
 
 // Handler handles WebSocket connections
 type Handler struct {
-	hub *Hub
+	hub             *Hub
+	timer           *Timer
+	roomRepo        room.Repository
+	participantRepo participant.Repository
+	userRepo        user.Repository
 }
 
 // NewHandler creates a new WebSocket handler
-func NewHandler(hub *Hub) *Handler {
+func NewHandler(
+	hub *Hub,
+	timer *Timer,
+	roomRepo room.Repository,
+	participantRepo participant.Repository,
+	userRepo user.Repository,
+) *Handler {
 	return &Handler{
-		hub: hub,
+		hub:             hub,
+		timer:           timer,
+		roomRepo:        roomRepo,
+		participantRepo: participantRepo,
+		userRepo:        userRepo,
 	}
 }
 
@@ -204,23 +222,182 @@ func (h *Handler) handleMessage(client *Client, data []byte) {
 	}
 }
 
-// Placeholder handlers - implement these based on your business logic
+// handleClientConnected handles CLIENT_CONNECTED message
 func (h *Handler) handleClientConnected(client *Client, payload interface{}) {
-	// TODO: Implement
-	log.Printf("Client connected: %v", payload)
+	payloadBytes, _ := json.Marshal(payload)
+	var data ClientConnectedPayload
+	if err := json.Unmarshal(payloadBytes, &data); err != nil {
+		log.Printf("Error unmarshaling CLIENT_CONNECTED payload: %v", err)
+		return
+	}
+
+	client.userID = data.UserID
+
+	// Broadcast participant update
+	h.broadcastParticipantUpdate(client.roomID)
 }
 
+// handleFetchParticipants handles FETCH_PARTICIPANTS message
 func (h *Handler) handleFetchParticipants(client *Client) {
-	// TODO: Implement
-	log.Printf("Fetch participants")
+	h.broadcastParticipantUpdate(client.roomID)
 }
 
+// handleSubmitTopic handles SUBMIT_TOPIC message
 func (h *Handler) handleSubmitTopic(client *Client, payload interface{}) {
-	// TODO: Implement
-	log.Printf("Submit topic: %v", payload)
+	payloadBytes, _ := json.Marshal(payload)
+	var data SubmitTopicPayload
+	if err := json.Unmarshal(payloadBytes, &data); err != nil {
+		log.Printf("Error unmarshaling SUBMIT_TOPIC payload: %v", err)
+		return
+	}
+
+	ctx := context.Background()
+
+	// Find room
+	roomID, err := room.NewRoomIDFromString(client.roomID)
+	if err != nil {
+		log.Printf("Invalid room ID: %v", err)
+		return
+	}
+
+	foundRoom, err := h.roomRepo.FindByID(ctx, roomID)
+	if err != nil {
+		log.Printf("Room not found: %v", err)
+		return
+	}
+
+	// Save game data
+	foundRoom.SetGameData(
+		data.OriginalEmojis,
+		data.DisplayedEmojis,
+		data.DummyIndex,
+		data.DummyEmoji,
+	)
+
+	if err := h.roomRepo.Save(ctx, foundRoom); err != nil {
+		log.Printf("Error saving room: %v", err)
+		return
+	}
+
+	// Change status to discussing
+	foundRoom.ChangeStatus(room.StatusDiscussing)
+	h.roomRepo.Save(ctx, foundRoom)
+
+	// Broadcast state update
+	dummyIdx := foundRoom.DummyIndex()
+	h.hub.Broadcast(client.roomID, Message{
+		Type: MessageTypeStateUpdate,
+		Payload: StateUpdatePayload{
+			NextState: "discussing",
+			Data: &StateUpdateDataPayload{
+				Topic:           foundRoom.Topic(),
+				DisplayedEmojis: foundRoom.DisplayedEmojis(),
+				OriginalEmojis:  foundRoom.OriginalEmojis(),
+				DummyIndex:      dummyIdx,
+				DummyEmoji:      foundRoom.DummyEmoji(),
+				Assignments:     foundRoom.Assignments(),
+			},
+		},
+	})
+
+	// Start timer after 5 seconds delay
+	h.timer.StartTimer(client.roomID)
 }
 
+// handleAnswering handles ANSWERING message
 func (h *Handler) handleAnswering(client *Client, payload interface{}) {
-	// TODO: Implement
-	log.Printf("Answering: %v", payload)
+	payloadBytes, _ := json.Marshal(payload)
+	var data AnsweringPayload
+	if err := json.Unmarshal(payloadBytes, &data); err != nil {
+		log.Printf("Error unmarshaling ANSWERING payload: %v", err)
+		return
+	}
+
+	ctx := context.Background()
+
+	// Find room
+	roomID, err := room.NewRoomIDFromString(client.roomID)
+	if err != nil {
+		log.Printf("Invalid room ID: %v", err)
+		return
+	}
+
+	foundRoom, err := h.roomRepo.FindByID(ctx, roomID)
+	if err != nil {
+		log.Printf("Room not found: %v", err)
+		return
+	}
+
+	// Save all data
+	foundRoom.SetAnswer(data.Answer)
+	foundRoom.SetGameData(
+		data.OriginalEmojis,
+		data.DisplayedEmojis,
+		data.DummyIndex,
+		data.DummyEmoji,
+	)
+	foundRoom.ChangeStatus(room.StatusChecking)
+
+	if err := h.roomRepo.Save(ctx, foundRoom); err != nil {
+		log.Printf("Error saving room: %v", err)
+		return
+	}
+
+	// Broadcast state update to checking
+	dummyIdx := foundRoom.DummyIndex()
+	h.hub.Broadcast(client.roomID, Message{
+		Type: MessageTypeStateUpdate,
+		Payload: StateUpdatePayload{
+			NextState: "checking",
+			Data: &StateUpdateDataPayload{
+				Topic:           foundRoom.Topic(),
+				DisplayedEmojis: foundRoom.DisplayedEmojis(),
+				OriginalEmojis:  foundRoom.OriginalEmojis(),
+				DummyIndex:      dummyIdx,
+				DummyEmoji:      foundRoom.DummyEmoji(),
+				Assignments:     foundRoom.Assignments(),
+			},
+		},
+	})
+}
+
+// broadcastParticipantUpdate broadcasts participant list to all clients in a room
+func (h *Handler) broadcastParticipantUpdate(roomID string) {
+	ctx := context.Background()
+
+	participantRoomID, err := participant.NewRoomIDFromString(roomID)
+	if err != nil {
+		log.Printf("Invalid room ID: %v", err)
+		return
+	}
+
+	participants, err := h.participantRepo.FindByRoomID(ctx, participantRoomID)
+	if err != nil {
+		log.Printf("Error fetching participants: %v", err)
+		return
+	}
+
+	participantDataList := []ParticipantData{}
+	for _, p := range participants {
+		// Fetch user info
+		u, err := h.userRepo.FindByID(ctx, user.UserID{})
+		userName := "Unknown"
+		if err == nil {
+			userName = u.Name().String()
+		}
+
+		participantDataList = append(participantDataList, ParticipantData{
+			UserID:   p.UserID().String(),
+			UserName: userName,
+			Role:     p.Role().String(),
+			IsLeader: p.IsLeader(),
+		})
+	}
+
+	h.hub.Broadcast(roomID, Message{
+		Type: MessageTypeParticipantUpdate,
+		Payload: ParticipantUpdatePayload{
+			Participants: participantDataList,
+		},
+	})
 }

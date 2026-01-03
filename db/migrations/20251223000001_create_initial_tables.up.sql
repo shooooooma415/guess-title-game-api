@@ -27,6 +27,11 @@ CREATE TABLE rooms (
     host_user_id UUID NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     started_at TIMESTAMP,
+    original_emojis TEXT[],
+    displayed_emojis TEXT[],
+    dummy_index INTEGER,
+    dummy_emoji VARCHAR(50),
+    assignments TEXT[],
     CONSTRAINT fk_room_theme FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE RESTRICT,
     CONSTRAINT fk_room_host FOREIGN KEY (host_user_id) REFERENCES users(id) ON DELETE CASCADE
 );

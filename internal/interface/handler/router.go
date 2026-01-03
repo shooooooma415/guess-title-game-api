@@ -3,10 +3,15 @@ package handler
 import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/shooooooma415/guess-title-game-api/internal/interface/websocket"
 )
 
 // NewRouter creates a new HTTP router
-func NewRouter() *echo.Echo {
+func NewRouter(
+	userHandler *UserHandler,
+	roomHandler *RoomHandler,
+	wsHandler *websocket.Handler,
+) *echo.Echo {
 	e := echo.New()
 
 	// Middleware
@@ -17,24 +22,22 @@ func NewRouter() *echo.Echo {
 	// Health check
 	e.GET("/health", healthCheck)
 
+	// WebSocket endpoint
+	e.GET("/ws", wsHandler.HandleWebSocket)
+
 	// API routes
-	api := e.Group("/api/v1")
+	api := e.Group("/api")
 	{
 		// User routes
-		// users := api.Group("/users")
-		// {
-		// 	users.POST("", userHandler.Create)
-		// 	users.GET("/:id", userHandler.GetByID)
-		// }
+		api.POST("/user", userHandler.JoinRoom)
 
 		// Room routes
-		// rooms := api.Group("/rooms")
-		// {
-		// 	rooms.POST("", roomHandler.Create)
-		// 	rooms.GET("/:id", roomHandler.GetByID)
-		// 	rooms.POST("/:code/join", roomHandler.Join)
-		// }
-		_ = api
+		api.POST("/rooms", roomHandler.CreateRoom)
+		api.POST("/rooms/:room_id/start", roomHandler.StartGame)
+		api.POST("/rooms/:room_id/topic", roomHandler.SetTopic)
+		api.POST("/rooms/:room_id/answer", roomHandler.SubmitAnswer)
+		api.POST("/rooms/:room_id/skip-discussion", roomHandler.SkipDiscussion)
+		api.POST("/rooms/:room_id/finish", roomHandler.FinishGame)
 	}
 
 	return e

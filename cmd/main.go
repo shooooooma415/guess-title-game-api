@@ -4,7 +4,11 @@ import (
 	"log"
 
 	"github.com/shooooooma415/guess-title-game-api/config"
+	"github.com/shooooooma415/guess-title-game-api/internal/infrastructure/persistence"
 	"github.com/shooooooma415/guess-title-game-api/internal/interface/handler"
+	"github.com/shooooooma415/guess-title-game-api/internal/interface/websocket"
+	roomUseCase "github.com/shooooooma415/guess-title-game-api/internal/usecase/room"
+	userUseCase "github.com/shooooooma415/guess-title-game-api/internal/usecase/user"
 )
 
 func main() {
@@ -14,23 +18,59 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Initialize database (commented out until repositories are implemented)
-	// dbCfg := persistence.Config{
-	// 	Host:     cfg.Database.Host,
-	// 	Port:     cfg.Database.Port,
-	// 	User:     cfg.Database.User,
-	// 	Password: cfg.Database.Password,
-	// 	DBName:   cfg.Database.DBName,
-	// 	SSLMode:  cfg.Database.SSLMode,
-	// }
-	// db, err := persistence.NewDB(dbCfg)
-	// if err != nil {
-	// 	log.Fatalf("Failed to connect to database: %v", err)
-	// }
-	// defer db.Close()
+	// Initialize database
+	dbCfg := persistence.Config{
+		Host:     cfg.Database.Host,
+		Port:     cfg.Database.Port,
+		User:     cfg.Database.User,
+		Password: cfg.Database.Password,
+		DBName:   cfg.Database.DBName,
+		SSLMode:  cfg.Database.SSLMode,
+	}
+	db, err := persistence.NewDB(dbCfg)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	log.Println("Database connection established")
+
+	// Initialize repositories
+	userRepo := persistence.NewUserRepository(db)
+	roomRepo := persistence.NewRoomRepository(db)
+	themeRepo := persistence.NewThemeRepository(db)
+	participantRepo := persistence.NewParticipantRepository(db)
+
+	// Initialize use cases
+	joinRoomUseCase := userUseCase.NewJoinRoomUseCase(userRepo, roomRepo, participantRepo)
+	createRoomUseCase := roomUseCase.NewCreateRoomUseCase(userRepo, roomRepo, themeRepo, participantRepo)
+	startGameUseCase := roomUseCase.NewStartGameUseCase(roomRepo, participantRepo)
+	setTopicUseCase := roomUseCase.NewSetTopicUseCase(roomRepo, participantRepo)
+	submitAnswerUseCase := roomUseCase.NewSubmitAnswerUseCase(roomRepo, participantRepo)
+	skipDiscussionUseCase := roomUseCase.NewSkipDiscussionUseCase(roomRepo, participantRepo)
+	finishGameUseCase := roomUseCase.NewFinishGameUseCase(roomRepo, participantRepo)
+
+	// Initialize handlers
+	userHandler := handler.NewUserHandler(joinRoomUseCase)
+	roomHandler := handler.NewRoomHandler(
+		createRoomUseCase,
+		startGameUseCase,
+		setTopicUseCase,
+		submitAnswerUseCase,
+		skipDiscussionUseCase,
+		finishGameUseCase,
+	)
+
+	// Initialize WebSocket hub and timer
+	hub := websocket.NewHub()
+	timer := websocket.NewTimer(hub)
+	wsHandler := websocket.NewHandler(hub, timer, roomRepo, participantRepo, userRepo)
+
+	// Start WebSocket hub
+	go hub.Run()
 
 	// Initialize router
-	e := handler.NewRouter()
+	e := handler.NewRouter(userHandler, roomHandler, wsHandler)
 
 	// Start server
 	log.Printf("Starting server on port %s", cfg.Server.Port)
