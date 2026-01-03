@@ -16,11 +16,15 @@ export DB_PASSWORD="your-secure-password"
 # 1. APIの有効化
 gcloud services enable cloudbuild.googleapis.com run.googleapis.com sqladmin.googleapis.com secretmanager.googleapis.com --project=$GCP_PROJECT_ID
 
-# 2. Cloud SQLインスタンスの作成
+# 2. Cloud SQLインスタンスの作成（最小構成）
 gcloud sql instances create guess-title-game-db \
   --database-version=POSTGRES_16 \
   --tier=db-f1-micro \
   --region=$GCP_REGION \
+  --storage-type=HDD \
+  --storage-size=10GB \
+  --no-backup \
+  --activation-policy=ALWAYS \
   --project=$GCP_PROJECT_ID
 
 # 3. データベースとユーザーの設定
@@ -78,4 +82,10 @@ gcloud run services delete guess-title-game-api --region $GCP_REGION
 
 # Cloud SQLインスタンスの削除
 gcloud sql instances delete guess-title-game-db
+
+# Cloud SQLインスタンスの停止（コスト削減: $1-2/月）
+gcloud sql instances patch guess-title-game-db --activation-policy NEVER
+
+# Cloud SQLインスタンスの起動
+gcloud sql instances patch guess-title-game-db --activation-policy ALWAYS
 ```
