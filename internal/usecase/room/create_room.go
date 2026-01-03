@@ -2,12 +2,12 @@ package room
 
 import (
 	"context"
-	"math/rand"
 
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/participant"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/room"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/theme"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/user"
+	"github.com/shooooooma415/guess-title-game-api/utils"
 )
 
 // CreateRoomOutput represents the output after creating a room
@@ -49,7 +49,7 @@ func (uc *CreateRoomUseCase) Execute(ctx context.Context) (*CreateRoomOutput, er
 	if err != nil || len(themes) == 0 {
 		return nil, err
 	}
-	selectedTheme := themes[rand.Intn(len(themes))]
+	selectedTheme := utils.RandomSelect(themes)
 
 	// Create host user
 	hostUserID := user.NewUserID()
