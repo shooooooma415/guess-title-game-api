@@ -11,12 +11,17 @@ import (
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/user"
 	roomUseCase "github.com/shooooooma415/guess-title-game-api/internal/usecase/room"
 )
-func TestCreateRoomUseCase_Execute_Success(t *testing.T) {
-	// Setup
+
+// Helper function to create a test theme
+func createTestTheme() *theme.Theme {
 	themeID := theme.NewThemeID()
 	themeTitle, _ := theme.NewThemeTitle("Test Theme")
 	hint := theme.NewHint("Test Hint")
-	testTheme := theme.NewTheme(themeID, themeTitle, hint)
+	return theme.NewTheme(themeID, themeTitle, hint)
+}
+func TestCreateRoomUseCase_Execute_Success(t *testing.T) {
+	// Setup
+	testTheme := createTestTheme()
 
 	userRepo := &mockUserRepository{}
 	roomRepo := &mockRoomRepository{}
@@ -64,16 +69,18 @@ func TestCreateRoomUseCase_Execute_Success(t *testing.T) {
 
 func TestCreateRoomUseCase_Execute_NoThemes(t *testing.T) {
 	// Setup
-	userRepo := &mockUserRepository{}
-	roomRepo := &mockRoomRepository{}
 	themeRepo := &mockThemeRepository{
 		findAllFunc: func(ctx context.Context) ([]*theme.Theme, error) {
 			return []*theme.Theme{}, nil
 		},
 	}
-	participantRepo := &mockParticipantRepository{}
 
-	useCase := roomUseCase.NewCreateRoomUseCase(userRepo, roomRepo, themeRepo, participantRepo)
+	useCase := roomUseCase.NewCreateRoomUseCase(
+		&mockUserRepository{},
+		&mockRoomRepository{},
+		themeRepo,
+		&mockParticipantRepository{},
+	)
 
 	// Execute
 	output, err := useCase.Execute(context.Background())
@@ -90,16 +97,18 @@ func TestCreateRoomUseCase_Execute_NoThemes(t *testing.T) {
 
 func TestCreateRoomUseCase_Execute_ThemeRepoError(t *testing.T) {
 	// Setup
-	userRepo := &mockUserRepository{}
-	roomRepo := &mockRoomRepository{}
 	themeRepo := &mockThemeRepository{
 		findAllFunc: func(ctx context.Context) ([]*theme.Theme, error) {
 			return nil, errors.New("database error")
 		},
 	}
-	participantRepo := &mockParticipantRepository{}
 
-	useCase := roomUseCase.NewCreateRoomUseCase(userRepo, roomRepo, themeRepo, participantRepo)
+	useCase := roomUseCase.NewCreateRoomUseCase(
+		&mockUserRepository{},
+		&mockRoomRepository{},
+		themeRepo,
+		&mockParticipantRepository{},
+	)
 
 	// Execute
 	output, err := useCase.Execute(context.Background())
@@ -116,10 +125,7 @@ func TestCreateRoomUseCase_Execute_ThemeRepoError(t *testing.T) {
 
 func TestCreateRoomUseCase_Execute_UserSaveError(t *testing.T) {
 	// Setup
-	themeID := theme.NewThemeID()
-	themeTitle, _ := theme.NewThemeTitle("Test Theme")
-	hint := theme.NewHint("Test Hint")
-	testTheme := theme.NewTheme(themeID, themeTitle, hint)
+	testTheme := createTestTheme()
 
 	userRepo := &mockUserRepository{
 		saveFunc: func(ctx context.Context, _ *user.User) error {
@@ -151,12 +157,8 @@ func TestCreateRoomUseCase_Execute_UserSaveError(t *testing.T) {
 
 func TestCreateRoomUseCase_Execute_RoomSaveError(t *testing.T) {
 	// Setup
-	themeID := theme.NewThemeID()
-	themeTitle, _ := theme.NewThemeTitle("Test Theme")
-	hint := theme.NewHint("Test Hint")
-	testTheme := theme.NewTheme(themeID, themeTitle, hint)
+	testTheme := createTestTheme()
 
-	userRepo := &mockUserRepository{}
 	roomRepo := &mockRoomRepository{
 		saveFunc: func(ctx context.Context, _ *room.Room) error {
 			return errors.New("room save error")
@@ -167,9 +169,13 @@ func TestCreateRoomUseCase_Execute_RoomSaveError(t *testing.T) {
 			return []*theme.Theme{testTheme}, nil
 		},
 	}
-	participantRepo := &mockParticipantRepository{}
 
-	useCase := roomUseCase.NewCreateRoomUseCase(userRepo, roomRepo, themeRepo, participantRepo)
+	useCase := roomUseCase.NewCreateRoomUseCase(
+		&mockUserRepository{},
+		roomRepo,
+		themeRepo,
+		&mockParticipantRepository{},
+	)
 
 	// Execute
 	output, err := useCase.Execute(context.Background())
@@ -186,13 +192,8 @@ func TestCreateRoomUseCase_Execute_RoomSaveError(t *testing.T) {
 
 func TestCreateRoomUseCase_Execute_ParticipantSaveError(t *testing.T) {
 	// Setup
-	themeID := theme.NewThemeID()
-	themeTitle, _ := theme.NewThemeTitle("Test Theme")
-	hint := theme.NewHint("Test Hint")
-	testTheme := theme.NewTheme(themeID, themeTitle, hint)
+	testTheme := createTestTheme()
 
-	userRepo := &mockUserRepository{}
-	roomRepo := &mockRoomRepository{}
 	themeRepo := &mockThemeRepository{
 		findAllFunc: func(ctx context.Context) ([]*theme.Theme, error) {
 			return []*theme.Theme{testTheme}, nil
@@ -204,7 +205,12 @@ func TestCreateRoomUseCase_Execute_ParticipantSaveError(t *testing.T) {
 		},
 	}
 
-	useCase := roomUseCase.NewCreateRoomUseCase(userRepo, roomRepo, themeRepo, participantRepo)
+	useCase := roomUseCase.NewCreateRoomUseCase(
+		&mockUserRepository{},
+		&mockRoomRepository{},
+		themeRepo,
+		participantRepo,
+	)
 
 	// Execute
 	output, err := useCase.Execute(context.Background())
