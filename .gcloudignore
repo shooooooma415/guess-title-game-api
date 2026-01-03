@@ -1,0 +1,11 @@
+.gcloudignore
+.git
+.gitignore
+README.md
+*.md
+.vscode
+.idea
+docker-compose.yml
+Dockerfile.dev
+*.test
+coverage.out

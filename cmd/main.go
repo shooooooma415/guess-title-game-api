@@ -1,32 +1,80 @@
 package main
 
 import (
-	"net/http"
+	"log"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/shooooooma415/guess-title-game-api/config"
+	"github.com/shooooooma415/guess-title-game-api/internal/infrastructure/persistence"
+	"github.com/shooooooma415/guess-title-game-api/internal/interface/handler"
+	"github.com/shooooooma415/guess-title-game-api/internal/interface/websocket"
+	roomUseCase "github.com/shooooooma415/guess-title-game-api/internal/usecase/room"
+	userUseCase "github.com/shooooooma415/guess-title-game-api/internal/usecase/user"
 )
 
 func main() {
-	e := echo.New()
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
 
-	// Middleware
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
+	// Initialize database
+	dbCfg := persistence.Config{
+		Host:     cfg.Database.Host,
+		Port:     cfg.Database.Port,
+		User:     cfg.Database.User,
+		Password: cfg.Database.Password,
+		DBName:   cfg.Database.DBName,
+		SSLMode:  cfg.Database.SSLMode,
+	}
+	db, err := persistence.NewDB(dbCfg)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
 
-	// Routes
-	e.GET("/", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{
-			"message": "Hello, World!",
-		})
-	})
+	log.Println("Database connection established")
 
-	e.GET("/health", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{
-			"status": "ok",
-		})
-	})
+	// Initialize repositories
+	userRepo := persistence.NewUserRepository(db)
+	roomRepo := persistence.NewRoomRepository(db)
+	themeRepo := persistence.NewThemeRepository(db)
+	participantRepo := persistence.NewParticipantRepository(db)
+
+	// Initialize use cases
+	joinRoomUseCase := userUseCase.NewJoinRoomUseCase(userRepo, roomRepo, participantRepo)
+	createRoomUseCase := roomUseCase.NewCreateRoomUseCase(userRepo, roomRepo, themeRepo, participantRepo)
+	startGameUseCase := roomUseCase.NewStartGameUseCase(roomRepo, participantRepo)
+	setTopicUseCase := roomUseCase.NewSetTopicUseCase(roomRepo, participantRepo)
+	submitAnswerUseCase := roomUseCase.NewSubmitAnswerUseCase(roomRepo, participantRepo)
+	skipDiscussionUseCase := roomUseCase.NewSkipDiscussionUseCase(roomRepo, participantRepo)
+	finishGameUseCase := roomUseCase.NewFinishGameUseCase(roomRepo, participantRepo)
+
+	// Initialize handlers
+	userHandler := handler.NewUserHandler(joinRoomUseCase)
+	roomHandler := handler.NewRoomHandler(
+		createRoomUseCase,
+		startGameUseCase,
+		setTopicUseCase,
+		submitAnswerUseCase,
+		skipDiscussionUseCase,
+		finishGameUseCase,
+	)
+
+	// Initialize WebSocket hub and timer
+	hub := websocket.NewHub()
+	timer := websocket.NewTimer(hub)
+	wsHandler := websocket.NewHandler(hub, timer, roomRepo, participantRepo, userRepo)
+
+	// Start WebSocket hub
+	go hub.Run()
+
+	// Initialize router
+	e := handler.NewRouter(userHandler, roomHandler, wsHandler)
 
 	// Start server
-	e.Logger.Fatal(e.Start(":8080"))
+	log.Printf("Starting server on port %s", cfg.Server.Port)
+	if err := e.Start(":" + cfg.Server.Port); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }

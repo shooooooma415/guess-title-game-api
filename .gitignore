@@ -3,3 +3,4 @@
 !.gitkeep
 
 .env
+bin/

@@ -2,7 +2,12 @@ module github.com/shooooooma415/guess-title-game-api
 
 go 1.24.0
 
-require github.com/labstack/echo/v4 v4.14.0
+require (
+	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.3
+	github.com/labstack/echo/v4 v4.14.0
+	github.com/lib/pq v1.10.9
+)
 
 require (
 	github.com/labstack/gommon v0.4.2 // indirect
