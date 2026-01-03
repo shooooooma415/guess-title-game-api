@@ -2,6 +2,7 @@ package room
 
 import (
 	"context"
+	"errors"
 
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/participant"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/room"
@@ -46,8 +47,11 @@ func NewCreateRoomUseCase(
 func (uc *CreateRoomUseCase) Execute(ctx context.Context) (*CreateRoomOutput, error) {
 	// Get a random theme
 	themes, err := uc.themeRepo.FindAll(ctx)
-	if err != nil || len(themes) == 0 {
+	if err != nil {
 		return nil, err
+	}
+	if len(themes) == 0 {
+		return nil, errors.New("no themes available")
 	}
 	selectedTheme := utils.RandomSelect(themes)
 
