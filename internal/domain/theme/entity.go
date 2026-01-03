@@ -4,11 +4,11 @@ package theme
 type Theme struct {
 	id    ThemeID
 	title ThemeTitle
-	hint  string
+	hint  Hint
 }
 
 // NewTheme creates a new Theme
-func NewTheme(id ThemeID, title ThemeTitle, hint string) *Theme {
+func NewTheme(id ThemeID, title ThemeTitle, hint Hint) *Theme {
 	return &Theme{
 		id:    id,
 		title: title,
@@ -25,11 +25,11 @@ func (t *Theme) Title() ThemeTitle {
 	return t.title
 }
 
-func (t *Theme) Hint() string {
+func (t *Theme) Hint() Hint {
 	return t.hint
 }
 
 // UpdateHint updates the theme hint
-func (t *Theme) UpdateHint(hint string) {
+func (t *Theme) UpdateHint(hint Hint) {
 	t.hint = hint
 }

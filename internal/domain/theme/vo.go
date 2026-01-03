@@ -52,3 +52,20 @@ func (t ThemeTitle) String() string {
 func (t ThemeTitle) Equals(other ThemeTitle) bool {
 	return t.value == other.value
 }
+
+// Hint represents a theme hint
+type Hint struct {
+	value string
+}
+
+func NewHint(value string) Hint {
+	return Hint{value: value}
+}
+
+func (h Hint) String() string {
+	return h.value
+}
+
+func (h Hint) IsEmpty() bool {
+	return h.value == ""
+}

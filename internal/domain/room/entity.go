@@ -7,18 +7,18 @@ type Room struct {
 	id              RoomID
 	code            RoomCode
 	themeID         ThemeID
-	topic           string
-	answer          string
+	topic           *Topic
+	answer          *Answer
 	status          RoomStatus
 	hostUserID      HostUserID
 	createdAt       time.Time
 	startedAt       *time.Time
 	// Game data fields
-	originalEmojis  []string
-	displayedEmojis []string
-	dummyIndex      *int
-	dummyEmoji      string
-	assignments     []string
+	originalEmojis  *EmojiList
+	displayedEmojis *EmojiList
+	dummyIndex      *DummyIndex
+	dummyEmoji      *DummyEmoji
+	assignments     *Assignments
 }
 
 // NewRoom creates a new Room
@@ -51,11 +51,11 @@ func (r *Room) ThemeID() ThemeID {
 	return r.themeID
 }
 
-func (r *Room) Topic() string {
+func (r *Room) Topic() *Topic {
 	return r.topic
 }
 
-func (r *Room) Answer() string {
+func (r *Room) Answer() *Answer {
 	return r.answer
 }
 
@@ -76,53 +76,53 @@ func (r *Room) StartedAt() *time.Time {
 }
 
 // Game data getters
-func (r *Room) OriginalEmojis() []string {
+func (r *Room) OriginalEmojis() *EmojiList {
 	return r.originalEmojis
 }
 
-func (r *Room) DisplayedEmojis() []string {
+func (r *Room) DisplayedEmojis() *EmojiList {
 	return r.displayedEmojis
 }
 
-func (r *Room) DummyIndex() *int {
+func (r *Room) DummyIndex() *DummyIndex {
 	return r.dummyIndex
 }
 
-func (r *Room) DummyEmoji() string {
+func (r *Room) DummyEmoji() *DummyEmoji {
 	return r.dummyEmoji
 }
 
-func (r *Room) Assignments() []string {
+func (r *Room) Assignments() *Assignments {
 	return r.assignments
 }
 
 // SetTopic sets the topic for the room
-func (r *Room) SetTopic(topic string) error {
+func (r *Room) SetTopic(topic Topic) error {
 	if r.status != StatusSettingTopic {
 		return ErrInvalidStatusTransition
 	}
-	r.topic = topic
+	r.topic = &topic
 	return nil
 }
 
 // SetGameData sets the game data (emojis, dummy info)
-func (r *Room) SetGameData(originalEmojis, displayedEmojis []string, dummyIndex int, dummyEmoji string) error {
-	r.originalEmojis = originalEmojis
-	r.displayedEmojis = displayedEmojis
+func (r *Room) SetGameData(originalEmojis, displayedEmojis EmojiList, dummyIndex DummyIndex, dummyEmoji DummyEmoji) error {
+	r.originalEmojis = &originalEmojis
+	r.displayedEmojis = &displayedEmojis
 	r.dummyIndex = &dummyIndex
-	r.dummyEmoji = dummyEmoji
+	r.dummyEmoji = &dummyEmoji
 	return nil
 }
 
 // SetAnswer sets the answer for the room
-func (r *Room) SetAnswer(answer string) error {
-	r.answer = answer
+func (r *Room) SetAnswer(answer Answer) error {
+	r.answer = &answer
 	return nil
 }
 
 // SetAssignments sets the emoji assignments
-func (r *Room) SetAssignments(assignments []string) error {
-	r.assignments = assignments
+func (r *Room) SetAssignments(assignments Assignments) error {
+	r.assignments = &assignments
 	return nil
 }
 

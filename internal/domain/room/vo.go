@@ -139,3 +139,117 @@ func NewRoomStatusFromString(value string) (RoomStatus, error) {
 		return 0, errors.New("invalid room status")
 	}
 }
+
+// Topic represents a room topic
+type Topic struct {
+	value string
+}
+
+func NewTopic(value string) (Topic, error) {
+	if value == "" {
+		return Topic{}, errors.New("topic cannot be empty")
+	}
+	return Topic{value: value}, nil
+}
+
+func (t Topic) String() string {
+	return t.value
+}
+
+func (t Topic) IsEmpty() bool {
+	return t.value == ""
+}
+
+// Answer represents a room answer
+type Answer struct {
+	value string
+}
+
+func NewAnswer(value string) (Answer, error) {
+	if value == "" {
+		return Answer{}, errors.New("answer cannot be empty")
+	}
+	return Answer{value: value}, nil
+}
+
+func (a Answer) String() string {
+	return a.value
+}
+
+func (a Answer) IsEmpty() bool {
+	return a.value == ""
+}
+
+// EmojiList represents a list of emojis
+type EmojiList struct {
+	value []string
+}
+
+func NewEmojiList(emojis []string) EmojiList {
+	return EmojiList{value: emojis}
+}
+
+func (e EmojiList) Values() []string {
+	return e.value
+}
+
+func (e EmojiList) IsEmpty() bool {
+	return len(e.value) == 0
+}
+
+func (e EmojiList) Count() int {
+	return len(e.value)
+}
+
+// DummyIndex represents the index of the dummy emoji
+type DummyIndex struct {
+	value int
+}
+
+func NewDummyIndex(value int) (DummyIndex, error) {
+	if value < 0 {
+		return DummyIndex{}, errors.New("dummy index must be non-negative")
+	}
+	return DummyIndex{value: value}, nil
+}
+
+func (d DummyIndex) Value() int {
+	return d.value
+}
+
+// DummyEmoji represents the dummy emoji
+type DummyEmoji struct {
+	value string
+}
+
+func NewDummyEmoji(value string) (DummyEmoji, error) {
+	if value == "" {
+		return DummyEmoji{}, errors.New("dummy emoji cannot be empty")
+	}
+	return DummyEmoji{value: value}, nil
+}
+
+func (d DummyEmoji) String() string {
+	return d.value
+}
+
+// Assignments represents emoji assignments
+type Assignments struct {
+	value []string
+}
+
+func NewAssignments(assignments []string) Assignments {
+	return Assignments{value: assignments}
+}
+
+func (a Assignments) Values() []string {
+	return a.value
+}
+
+func (a Assignments) IsEmpty() bool {
+	return len(a.value) == 0
+}
+
+func (a Assignments) Count() int {
+	return len(a.value)
+}
