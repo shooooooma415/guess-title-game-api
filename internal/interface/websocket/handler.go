@@ -202,6 +202,7 @@ func (h *Handler) handleMessage(client *Client, data []byte) {
 	var msg Message
 	if err := json.Unmarshal(data, &msg); err != nil {
 		log.Printf("Error unmarshaling message: %v", err)
+		h.sendError(client, "INVALID_MESSAGE", "Invalid message format")
 		return
 	}
 
@@ -220,6 +221,7 @@ func (h *Handler) handleMessage(client *Client, data []byte) {
 
 	default:
 		log.Printf("Unknown message type: %s", msg.Type)
+		h.sendError(client, "UNKNOWN_MESSAGE_TYPE", "Unknown message type: "+string(msg.Type))
 	}
 }
 
@@ -229,10 +231,14 @@ func (h *Handler) handleClientConnected(client *Client, payload interface{}) {
 	var data ClientConnectedPayload
 	if err := json.Unmarshal(payloadBytes, &data); err != nil {
 		log.Printf("Error unmarshaling CLIENT_CONNECTED payload: %v", err)
+		h.sendError(client, "INVALID_PAYLOAD", "Invalid CLIENT_CONNECTED payload")
 		return
 	}
 
 	client.userID = data.UserID
+
+	// Send initial room state to the connected client
+	h.sendInitialRoomState(client)
 
 	// Broadcast participant update
 	h.broadcastParticipantUpdate(client.roomID)
@@ -249,6 +255,7 @@ func (h *Handler) handleSubmitTopic(client *Client, payload interface{}) {
 	var data SubmitTopicPayload
 	if err := json.Unmarshal(payloadBytes, &data); err != nil {
 		log.Printf("Error unmarshaling SUBMIT_TOPIC payload: %v", err)
+		h.sendError(client, "INVALID_PAYLOAD", "Invalid SUBMIT_TOPIC payload")
 		return
 	}
 
@@ -336,6 +343,7 @@ func (h *Handler) handleAnswering(client *Client, payload interface{}) {
 	var data AnsweringPayload
 	if err := json.Unmarshal(payloadBytes, &data); err != nil {
 		log.Printf("Error unmarshaling ANSWERING payload: %v", err)
+		h.sendError(client, "INVALID_PAYLOAD", "Invalid ANSWERING payload")
 		return
 	}
 
@@ -413,6 +421,9 @@ func (h *Handler) handleAnswering(client *Client, payload interface{}) {
 			},
 		},
 	})
+
+	// Stop timer when transitioning to checking phase
+	h.timer.StopTimer(client.roomID)
 }
 
 // sendError sends an error message to a specific client
@@ -469,4 +480,82 @@ func (h *Handler) broadcastParticipantUpdate(roomID string) {
 			Participants: participantDataList,
 		},
 	})
+}
+
+// sendInitialRoomState sends the current room state to a newly connected client
+func (h *Handler) sendInitialRoomState(client *Client) {
+	ctx := context.Background()
+
+	// Fetch room using UseCase
+	roomOutput, err := h.fetchRoomUseCase.Execute(ctx, roomUseCase.FetchRoomInput{
+		RoomID: client.roomID,
+	})
+	if err != nil {
+		log.Printf("Error fetching room for initial state: %v", err)
+		h.sendError(client, "FETCH_ROOM_ERROR", "Failed to fetch room state")
+		return
+	}
+
+	foundRoom := roomOutput.Room
+
+	// Build state data payload
+	topicStr := ""
+	if foundRoom.Topic() != nil {
+		topicStr = foundRoom.Topic().String()
+	}
+
+	var dummyIdxPtr *int
+	if foundRoom.DummyIndex() != nil {
+		val := foundRoom.DummyIndex().Value()
+		dummyIdxPtr = &val
+	}
+
+	dummyEmojiStr := ""
+	if foundRoom.DummyEmoji() != nil {
+		dummyEmojiStr = foundRoom.DummyEmoji().String()
+	}
+
+	displayedEmojisSlice := []string{}
+	if foundRoom.DisplayedEmojis() != nil {
+		displayedEmojisSlice = foundRoom.DisplayedEmojis().Values()
+	}
+
+	originalEmojisSlice := []string{}
+	if foundRoom.OriginalEmojis() != nil {
+		originalEmojisSlice = foundRoom.OriginalEmojis().Values()
+	}
+
+	assignmentsSlice := []string{}
+	if foundRoom.Assignments() != nil {
+		assignmentsSlice = foundRoom.Assignments().Values()
+	}
+
+	// Create state update message with current room status
+	stateMsg := Message{
+		Type: MessageTypeStateUpdate,
+		Payload: StateUpdatePayload{
+			NextState: foundRoom.Status().String(),
+			Data: &StateUpdateDataPayload{
+				Topic:           topicStr,
+				DisplayedEmojis: displayedEmojisSlice,
+				OriginalEmojis:  originalEmojisSlice,
+				DummyIndex:      dummyIdxPtr,
+				DummyEmoji:      dummyEmojiStr,
+				Assignments:     assignmentsSlice,
+			},
+		},
+	}
+
+	// Send state to the specific client
+	data, err := json.Marshal(stateMsg)
+	if err != nil {
+		log.Printf("Error marshaling initial state message: %v", err)
+		return
+	}
+
+	select {
+	case client.send <- data:
+	default:
+		log.Printf("Failed to send initial state to client")
+	}
 }
