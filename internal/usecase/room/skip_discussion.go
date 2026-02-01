@@ -3,6 +3,7 @@ package room
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/event"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/participant"
@@ -48,6 +49,8 @@ func (uc *SkipDiscussionUseCase) Execute(ctx context.Context, input SkipDiscussi
 		return errors.New("room not found")
 	}
 
+	fmt.Printf("[SkipDiscussion] Current room status: %s, RoomID: %s\n", foundRoom.Status().String(), input.RoomID)
+
 	// Verify user is host
 	participantRoomID, _ := participant.NewRoomIDFromString(input.RoomID)
 	participantUserID, _ := participant.NewUserIDFromString(input.UserID)
@@ -57,13 +60,9 @@ func (uc *SkipDiscussionUseCase) Execute(ctx context.Context, input SkipDiscussi
 		return errors.New("participant not found")
 	}
 
-	if foundParticipant.Role() != participant.RoleHost {
-		return errors.New("only host can skip discussion")
-	}
-
-	// Verify dummy data exists
-	if foundRoom.DummyIndex() == nil {
-		return errors.New("dummy data is required before skipping discussion")
+	// Host or Leader can skip discussion
+	if foundParticipant.Role() != participant.RoleHost && !foundParticipant.IsLeader() {
+		return errors.New("only host or leader can skip discussion")
 	}
 
 	// Change status to answering

@@ -66,6 +66,25 @@ func NewDiscussionSkippedEvent(roomID string) *DiscussionSkippedEvent {
 	}
 }
 
+// AnswerSubmittedEvent is fired when answer is submitted (ANSWERING -> CHECKING)
+type AnswerSubmittedEvent struct {
+	BaseEvent
+	RoomID string
+	Status string // "checking"
+}
+
+func NewAnswerSubmittedEvent(roomID string) *AnswerSubmittedEvent {
+	return &AnswerSubmittedEvent{
+		BaseEvent: BaseEvent{
+			eventType:   "AnswerSubmitted",
+			occurredAt:  time.Now(),
+			aggregateID: roomID,
+		},
+		RoomID: roomID,
+		Status: "checking",
+	}
+}
+
 // GameFinishedEvent is fired when a game finishes (CHECKING -> FINISHED)
 type GameFinishedEvent struct {
 	BaseEvent

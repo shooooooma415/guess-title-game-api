@@ -50,14 +50,14 @@ func main() {
 	createRoomUseCase := roomUseCase.NewCreateRoomUseCase(userRepo, roomRepo, themeRepo, participantRepo)
 	startGameUseCase := roomUseCase.NewStartGameUseCase(roomRepo, participantRepo, eventPublisher)
 	setTopicUseCase := roomUseCase.NewSetTopicUseCase(roomRepo, participantRepo)
-	submitAnswerUseCase := roomUseCase.NewSubmitAnswerUseCase(roomRepo, participantRepo)
+	submitAnswerUseCase := roomUseCase.NewSubmitAnswerUseCase(roomRepo, participantRepo, eventPublisher)
 	skipDiscussionUseCase := roomUseCase.NewSkipDiscussionUseCase(roomRepo, participantRepo, eventPublisher)
 	finishGameUseCase := roomUseCase.NewFinishGameUseCase(roomRepo, participantRepo, eventPublisher)
 
 	// Initialize WebSocket-specific use cases
 	fetchRoomUseCase := roomUseCase.NewFetchRoomUseCase(roomRepo)
 	fetchParticipantsUseCase := roomUseCase.NewFetchRoomParticipantsUseCase(participantRepo, userRepo)
-	startDiscussionUseCase := roomUseCase.NewStartDiscussionUseCase(roomRepo)
+	startDiscussionUseCase := roomUseCase.NewStartDiscussionUseCase(roomRepo, participantRepo)
 	submitFinalAnswerUseCase := roomUseCase.NewSubmitFinalAnswerUseCase(roomRepo)
 
 	// Initialize handlers
@@ -81,6 +81,7 @@ func main() {
 		fetchParticipantsUseCase,
 		startDiscussionUseCase,
 		submitFinalAnswerUseCase,
+		themeRepo,
 	)
 
 	// Start WebSocket hub

@@ -145,3 +145,13 @@ func (r *Room) ChangeStatus(status RoomStatus) error {
 	r.status = status
 	return nil
 }
+
+// SetStatus sets the room status without validation (for repository reconstruction)
+func (r *Room) SetStatus(status RoomStatus) {
+	r.status = status
+}
+
+// SetTopicUnchecked sets the topic without validation (for repository reconstruction)
+func (r *Room) SetTopicUnchecked(topic *Topic) {
+	r.topic = topic
+}

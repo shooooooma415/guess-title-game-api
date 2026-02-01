@@ -4,16 +4,40 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
+	"github.com/shooooooma415/guess-title-game-api/internal/domain/theme"
 	roomUseCase "github.com/shooooooma415/guess-title-game-api/internal/usecase/room"
 )
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		// Allow connections from localhost and local network
+		origin := r.Header.Get("Origin")
+		allowedOrigins := []string{
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://172.16.30.111:3000",
+			"http://172.16.30.111:3001",
+		}
+
+		if origin == "" {
+			return true
+		}
+
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				return true
+			}
+		}
+
+		return false
+	},
 }
 
 // Client represents a WebSocket client
@@ -115,6 +139,7 @@ type Handler struct {
 	fetchParticipantsUseCase  *roomUseCase.FetchRoomParticipantsUseCase
 	startDiscussionUseCase    *roomUseCase.StartDiscussionUseCase
 	submitFinalAnswerUseCase  *roomUseCase.SubmitFinalAnswerUseCase
+	themeRepo                 theme.Repository
 }
 
 // NewHandler creates a new WebSocket handler
@@ -125,6 +150,7 @@ func NewHandler(
 	fetchParticipantsUseCase *roomUseCase.FetchRoomParticipantsUseCase,
 	startDiscussionUseCase *roomUseCase.StartDiscussionUseCase,
 	submitFinalAnswerUseCase *roomUseCase.SubmitFinalAnswerUseCase,
+	themeRepo theme.Repository,
 ) *Handler {
 	return &Handler{
 		hub:                       hub,
@@ -133,6 +159,7 @@ func NewHandler(
 		fetchParticipantsUseCase:  fetchParticipantsUseCase,
 		startDiscussionUseCase:    startDiscussionUseCase,
 		submitFinalAnswerUseCase:  submitFinalAnswerUseCase,
+		themeRepo:                 themeRepo,
 	}
 }
 
@@ -206,6 +233,8 @@ func (h *Handler) handleMessage(client *Client, data []byte) {
 		return
 	}
 
+	log.Printf("[WS RECEIVED] Type: %s, RoomID: %s, UserID: %s", msg.Type, client.roomID, client.userID)
+
 	switch msg.Type {
 	case MessageTypeClientConnected:
 		h.handleClientConnected(client, msg.Payload)
@@ -218,6 +247,10 @@ func (h *Handler) handleMessage(client *Client, data []byte) {
 
 	case MessageTypeAnswering:
 		h.handleAnswering(client, msg.Payload)
+
+	case "PING":
+		// Heartbeat message - just ignore, no response needed
+		// Client is checking if connection is alive
 
 	default:
 		log.Printf("Unknown message type: %s", msg.Type)
@@ -251,6 +284,7 @@ func (h *Handler) handleFetchParticipants(client *Client) {
 
 // handleSubmitTopic handles SUBMIT_TOPIC message
 func (h *Handler) handleSubmitTopic(client *Client, payload interface{}) {
+	log.Printf("[WS SUBMIT_TOPIC] Received from client in room: %s", client.roomID)
 	payloadBytes, _ := json.Marshal(payload)
 	var data SubmitTopicPayload
 	if err := json.Unmarshal(payloadBytes, &data); err != nil {
@@ -258,6 +292,7 @@ func (h *Handler) handleSubmitTopic(client *Client, payload interface{}) {
 		h.sendError(client, "INVALID_PAYLOAD", "Invalid SUBMIT_TOPIC payload")
 		return
 	}
+	log.Printf("[WS SUBMIT_TOPIC] Parsed payload - DisplayedEmojis: %d, OriginalEmojis: %d, DummyIndex: %d", len(data.DisplayedEmojis), len(data.OriginalEmojis), data.DummyIndex)
 
 	ctx := context.Background()
 
@@ -291,6 +326,7 @@ func (h *Handler) handleSubmitTopic(client *Client, payload interface{}) {
 	if foundRoom.Topic() != nil {
 		topicStr = foundRoom.Topic().String()
 	}
+	log.Printf("[WS SUBMIT_TOPIC] Broadcasting topic: '%s'", topicStr)
 
 	var dummyIdxPtr *int
 	if foundRoom.DummyIndex() != nil {

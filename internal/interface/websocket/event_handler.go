@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/event"
+	"github.com/shooooooma415/guess-title-game-api/internal/domain/theme"
 	roomUseCase "github.com/shooooooma415/guess-title-game-api/internal/usecase/room"
 )
 
@@ -30,6 +31,17 @@ func (h *Handler) SetupEventHandlers(eventPublisher event.Publisher) {
 		}
 
 		h.handleDiscussionSkippedEvent(discussionSkippedEvt)
+	})
+
+	// Subscribe to AnswerSubmittedEvent
+	eventPublisher.Subscribe("AnswerSubmitted", func(evt event.Event) {
+		answerSubmittedEvt, ok := evt.(*event.AnswerSubmittedEvent)
+		if !ok {
+			log.Printf("Invalid event type for AnswerSubmitted")
+			return
+		}
+
+		h.handleAnswerSubmittedEvent(answerSubmittedEvt)
 	})
 
 	// Subscribe to GameFinishedEvent
@@ -134,8 +146,8 @@ func (h *Handler) handleDiscussionSkippedEvent(evt *event.DiscussionSkippedEvent
 	})
 }
 
-// handleGameFinishedEvent handles GameFinishedEvent and broadcasts STATE_UPDATE
-func (h *Handler) handleGameFinishedEvent(evt *event.GameFinishedEvent) {
+// handleAnswerSubmittedEvent handles AnswerSubmittedEvent and broadcasts STATE_UPDATE
+func (h *Handler) handleAnswerSubmittedEvent(evt *event.AnswerSubmittedEvent) {
 	ctx := context.Background()
 
 	// Fetch room for broadcasting
@@ -143,10 +155,20 @@ func (h *Handler) handleGameFinishedEvent(evt *event.GameFinishedEvent) {
 		RoomID: evt.RoomID,
 	})
 	if err != nil {
-		log.Printf("Error fetching room for GameFinishedEvent: %v", err)
+		log.Printf("Error fetching room for AnswerSubmittedEvent: %v", err)
 		return
 	}
 	foundRoom := roomOutput.Room
+
+	// Fetch theme
+	themeStr := ""
+	themeID, err := theme.NewThemeIDFromString(foundRoom.ThemeID().String())
+	if err == nil {
+		themeObj, err := h.themeRepo.FindByID(ctx, themeID)
+		if err == nil && themeObj != nil {
+			themeStr = themeObj.Title().String()
+		}
+	}
 
 	// Build state data payload
 	topicStr := ""
@@ -185,13 +207,15 @@ func (h *Handler) handleGameFinishedEvent(evt *event.GameFinishedEvent) {
 		answerStr = foundRoom.Answer().String()
 	}
 
-	// Broadcast STATE_UPDATE with finished status (include answer)
+	// Broadcast STATE_UPDATE with checking status (include answer and theme)
 	h.hub.Broadcast(evt.RoomID, Message{
 		Type: MessageTypeStateUpdate,
 		Payload: StateUpdatePayload{
-			NextState: foundRoom.Status().String(), // "finished"
+			NextState: foundRoom.Status().String(), // "checking"
 			Data: &StateUpdateDataPayload{
+				Theme:           themeStr,
 				Topic:           topicStr,
+				Answer:          answerStr,
 				DisplayedEmojis: displayedEmojisSlice,
 				OriginalEmojis:  originalEmojisSlice,
 				DummyIndex:      dummyIdxPtr,
@@ -201,5 +225,87 @@ func (h *Handler) handleGameFinishedEvent(evt *event.GameFinishedEvent) {
 		},
 	})
 
-	log.Printf("Game finished event broadcasted for room %s with answer: %s", evt.RoomID, answerStr)
+	log.Printf("Answer submitted event broadcasted for room %s with answer: %s, theme: %s", evt.RoomID, answerStr, themeStr)
+}
+
+// handleGameFinishedEvent handles GameFinishedEvent and broadcasts STATE_UPDATE
+func (h *Handler) handleGameFinishedEvent(evt *event.GameFinishedEvent) {
+	ctx := context.Background()
+
+	// Fetch room for broadcasting
+	roomOutput, err := h.fetchRoomUseCase.Execute(ctx, roomUseCase.FetchRoomInput{
+		RoomID: evt.RoomID,
+	})
+	if err != nil {
+		log.Printf("Error fetching room for GameFinishedEvent: %v", err)
+		return
+	}
+	foundRoom := roomOutput.Room
+
+	// Fetch theme
+	themeStr := ""
+	themeID, err := theme.NewThemeIDFromString(foundRoom.ThemeID().String())
+	if err == nil {
+		themeObj, err := h.themeRepo.FindByID(ctx, themeID)
+		if err == nil && themeObj != nil {
+			themeStr = themeObj.Title().String()
+		}
+	}
+
+	// Build state data payload
+	topicStr := ""
+	if foundRoom.Topic() != nil {
+		topicStr = foundRoom.Topic().String()
+	}
+
+	var dummyIdxPtr *int
+	if foundRoom.DummyIndex() != nil {
+		val := foundRoom.DummyIndex().Value()
+		dummyIdxPtr = &val
+	}
+
+	dummyEmojiStr := ""
+	if foundRoom.DummyEmoji() != nil {
+		dummyEmojiStr = foundRoom.DummyEmoji().String()
+	}
+
+	displayedEmojisSlice := []string{}
+	if foundRoom.DisplayedEmojis() != nil {
+		displayedEmojisSlice = foundRoom.DisplayedEmojis().Values()
+	}
+
+	originalEmojisSlice := []string{}
+	if foundRoom.OriginalEmojis() != nil {
+		originalEmojisSlice = foundRoom.OriginalEmojis().Values()
+	}
+
+	assignmentsSlice := []string{}
+	if foundRoom.Assignments() != nil {
+		assignmentsSlice = foundRoom.Assignments().Values()
+	}
+
+	answerStr := ""
+	if foundRoom.Answer() != nil {
+		answerStr = foundRoom.Answer().String()
+	}
+
+	// Broadcast STATE_UPDATE with finished status (include answer and theme)
+	h.hub.Broadcast(evt.RoomID, Message{
+		Type: MessageTypeStateUpdate,
+		Payload: StateUpdatePayload{
+			NextState: foundRoom.Status().String(), // "finished"
+			Data: &StateUpdateDataPayload{
+				Theme:           themeStr,
+				Topic:           topicStr,
+				Answer:          answerStr,
+				DisplayedEmojis: displayedEmojisSlice,
+				OriginalEmojis:  originalEmojisSlice,
+				DummyIndex:      dummyIdxPtr,
+				DummyEmoji:      dummyEmojiStr,
+				Assignments:     assignmentsSlice,
+			},
+		},
+	})
+
+	log.Printf("Game finished event broadcasted for room %s with answer: %s, theme: %s", evt.RoomID, answerStr, themeStr)
 }

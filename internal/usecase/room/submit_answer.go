@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/shooooooma415/guess-title-game-api/internal/domain/event"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/participant"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/room"
 )
@@ -19,16 +20,19 @@ type SubmitAnswerInput struct {
 type SubmitAnswerUseCase struct {
 	roomRepo        room.Repository
 	participantRepo participant.Repository
+	eventPublisher  event.Publisher
 }
 
 // NewSubmitAnswerUseCase creates a new SubmitAnswerUseCase
 func NewSubmitAnswerUseCase(
 	roomRepo room.Repository,
 	participantRepo participant.Repository,
+	eventPublisher event.Publisher,
 ) *SubmitAnswerUseCase {
 	return &SubmitAnswerUseCase{
 		roomRepo:        roomRepo,
 		participantRepo: participantRepo,
+		eventPublisher:  eventPublisher,
 	}
 }
 
@@ -76,6 +80,9 @@ func (uc *SubmitAnswerUseCase) Execute(ctx context.Context, input SubmitAnswerIn
 	if err := uc.roomRepo.Save(ctx, foundRoom); err != nil {
 		return err
 	}
+
+	// Publish AnswerSubmittedEvent
+	uc.eventPublisher.Publish(event.NewAnswerSubmittedEvent(input.RoomID))
 
 	return nil
 }
