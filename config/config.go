@@ -3,12 +3,14 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config represents application configuration
 type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
+	CORS     CORSConfig
 }
 
 // ServerConfig represents server configuration
@@ -24,6 +26,11 @@ type DatabaseConfig struct {
 	Password string
 	DBName   string
 	SSLMode  string
+}
+
+// CORSConfig represents CORS configuration
+type CORSConfig struct {
+	AllowOrigins []string
 }
 
 // Load loads configuration from environment variables
@@ -45,6 +52,9 @@ func Load() (*Config, error) {
 			DBName:   getEnv("DB_NAME", "guess_title_game"),
 			SSLMode:  getEnv("DB_SSL_MODE", "disable"),
 		},
+		CORS: CORSConfig{
+			AllowOrigins: parseCORSOrigins(getEnv("CORS_ALLOW_ORIGINS", "http://localhost:3000,http://localhost:3001")),
+		},
 	}, nil
 }
 
@@ -53,4 +63,19 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func parseCORSOrigins(origins string) []string {
+	if origins == "" {
+		return []string{}
+	}
+	parts := strings.Split(origins, ",")
+	result := make([]string, 0, len(parts))
+	for _, origin := range parts {
+		trimmed := strings.TrimSpace(origin)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
