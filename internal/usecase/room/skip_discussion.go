@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/shooooooma415/guess-title-game-api/internal/domain/event"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/participant"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/room"
 )
@@ -18,16 +19,19 @@ type SkipDiscussionInput struct {
 type SkipDiscussionUseCase struct {
 	roomRepo        room.Repository
 	participantRepo participant.Repository
+	eventPublisher  event.Publisher
 }
 
 // NewSkipDiscussionUseCase creates a new SkipDiscussionUseCase
 func NewSkipDiscussionUseCase(
 	roomRepo room.Repository,
 	participantRepo participant.Repository,
+	eventPublisher event.Publisher,
 ) *SkipDiscussionUseCase {
 	return &SkipDiscussionUseCase{
 		roomRepo:        roomRepo,
 		participantRepo: participantRepo,
+		eventPublisher:  eventPublisher,
 	}
 }
 
@@ -71,6 +75,9 @@ func (uc *SkipDiscussionUseCase) Execute(ctx context.Context, input SkipDiscussi
 	if err := uc.roomRepo.Save(ctx, foundRoom); err != nil {
 		return err
 	}
+
+	// Publish DiscussionSkippedEvent
+	uc.eventPublisher.Publish(event.NewDiscussionSkippedEvent(input.RoomID))
 
 	return nil
 }

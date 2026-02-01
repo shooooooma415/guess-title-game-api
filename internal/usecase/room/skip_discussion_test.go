@@ -15,6 +15,7 @@ func TestSkipDiscussionUseCaseExecute(t *testing.T) {
 		useCase         *roomUseCase.SkipDiscussionUseCase
 		roomRepo        *mockRoomRepository
 		participantRepo *mockParticipantRepository
+		eventPublisher  *mockEventPublisher
 	}
 
 	newFixture := func(t *testing.T) *fixture {
@@ -22,16 +23,19 @@ func TestSkipDiscussionUseCaseExecute(t *testing.T) {
 
 		roomRepo := &mockRoomRepository{}
 		participantRepo := &mockParticipantRepository{}
+		eventPublisher := &mockEventPublisher{}
 
 		useCase := roomUseCase.NewSkipDiscussionUseCase(
 			roomRepo,
 			participantRepo,
+			eventPublisher,
 		)
 
 		return &fixture{
 			useCase:         useCase,
 			roomRepo:        roomRepo,
 			participantRepo: participantRepo,
+			eventPublisher:  eventPublisher,
 		}
 	}
 

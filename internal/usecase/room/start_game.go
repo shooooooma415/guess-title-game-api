@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/shooooooma415/guess-title-game-api/internal/domain/event"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/participant"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/room"
 )
@@ -18,16 +19,19 @@ type StartGameInput struct {
 type StartGameUseCase struct {
 	roomRepo        room.Repository
 	participantRepo participant.Repository
+	eventPublisher  event.Publisher
 }
 
 // NewStartGameUseCase creates a new StartGameUseCase
 func NewStartGameUseCase(
 	roomRepo room.Repository,
 	participantRepo participant.Repository,
+	eventPublisher event.Publisher,
 ) *StartGameUseCase {
 	return &StartGameUseCase{
 		roomRepo:        roomRepo,
 		participantRepo: participantRepo,
+		eventPublisher:  eventPublisher,
 	}
 }
 
@@ -66,6 +70,9 @@ func (uc *StartGameUseCase) Execute(ctx context.Context, input StartGameInput) e
 	if err := uc.roomRepo.Save(ctx, foundRoom); err != nil {
 		return err
 	}
+
+	// Publish GameStartedEvent
+	uc.eventPublisher.Publish(event.NewGameStartedEvent(input.RoomID))
 
 	return nil
 }
