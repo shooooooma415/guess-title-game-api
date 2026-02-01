@@ -15,6 +15,7 @@ func TestSubmitAnswerUseCaseExecute(t *testing.T) {
 		useCase         *roomUseCase.SubmitAnswerUseCase
 		roomRepo        *mockRoomRepository
 		participantRepo *mockParticipantRepository
+		eventPublisher  *mockEventPublisher
 	}
 
 	newFixture := func(t *testing.T) *fixture {
@@ -22,16 +23,19 @@ func TestSubmitAnswerUseCaseExecute(t *testing.T) {
 
 		roomRepo := &mockRoomRepository{}
 		participantRepo := &mockParticipantRepository{}
+		eventPublisher := &mockEventPublisher{}
 
 		useCase := roomUseCase.NewSubmitAnswerUseCase(
 			roomRepo,
 			participantRepo,
+			eventPublisher,
 		)
 
 		return &fixture{
 			useCase:         useCase,
 			roomRepo:        roomRepo,
 			participantRepo: participantRepo,
+			eventPublisher:  eventPublisher,
 		}
 	}
 

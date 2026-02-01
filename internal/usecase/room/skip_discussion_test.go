@@ -161,8 +161,8 @@ func TestSkipDiscussionUseCaseExecute(t *testing.T) {
 		if err == nil {
 			t.Error("Expected error when non-host tries to skip discussion")
 		}
-		if err.Error() != "only host can skip discussion" {
-			t.Errorf("Expected 'only host can skip discussion' error, got: %v", err)
+		if err.Error() != "only host or leader can skip discussion" {
+			t.Errorf("Expected 'only host or leader can skip discussion' error, got: %v", err)
 		}
 	})
 
@@ -198,8 +198,7 @@ func TestSkipDiscussionUseCaseExecute(t *testing.T) {
 		// assert
 		if err == nil {
 			t.Error("Expected error when dummy data is not set")
-		}
-		if err.Error() != "dummy data is required before skipping discussion" {
+		} else if err.Error() != "dummy data is required before skipping discussion" {
 			t.Errorf("Expected 'dummy data is required before skipping discussion' error, got: %v", err)
 		}
 	})

@@ -65,6 +65,11 @@ func (uc *SkipDiscussionUseCase) Execute(ctx context.Context, input SkipDiscussi
 		return errors.New("only host or leader can skip discussion")
 	}
 
+	// Validate dummy data is set
+	if foundRoom.DummyEmoji() == nil || foundRoom.DummyIndex() == nil {
+		return errors.New("dummy data is required before skipping discussion")
+	}
+
 	// Change status to answering
 	if err := foundRoom.ChangeStatus(room.StatusAnswering); err != nil {
 		return err
