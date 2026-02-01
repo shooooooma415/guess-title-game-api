@@ -91,7 +91,7 @@ func main() {
 	wsHandler.SetupEventHandlers(eventPublisher)
 
 	// Initialize router
-	e := handler.NewRouter(userHandler, roomHandler, wsHandler)
+	e := handler.NewRouter(cfg, userHandler, roomHandler, wsHandler)
 
 	// Start server
 	log.Printf("Starting server on port %s", cfg.Server.Port)
