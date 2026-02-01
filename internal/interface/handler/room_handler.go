@@ -99,9 +99,13 @@ func (h *RoomHandler) StartGame(c echo.Context) error {
 
 // SetTopicRequest represents the request body for setting a topic
 type SetTopicRequest struct {
-	UserID string   `json:"user_id"`
-	Topic  string   `json:"topic"`
-	Emojis []string `json:"emojis"`
+	UserID          string   `json:"user_id"`
+	Topic           string   `json:"topic"`
+	Emojis          []string `json:"emojis"`
+	DisplayedEmojis []string `json:"displayed_emojis"`
+	OriginalEmojis  []string `json:"original_emojis"`
+	DummyIndex      int      `json:"dummy_index"`
+	DummyEmoji      string   `json:"dummy_emoji"`
 }
 
 // SetTopic handles POST /api/rooms/:room_id/topic
@@ -116,10 +120,14 @@ func (h *RoomHandler) SetTopic(c echo.Context) error {
 	}
 
 	input := roomUseCase.SetTopicInput{
-		RoomID: roomID,
-		UserID: req.UserID,
-		Topic:  req.Topic,
-		Emojis: req.Emojis,
+		RoomID:          roomID,
+		UserID:          req.UserID,
+		Topic:           req.Topic,
+		Emojis:          req.Emojis,
+		DisplayedEmojis: req.DisplayedEmojis,
+		OriginalEmojis:  req.OriginalEmojis,
+		DummyIndex:      req.DummyIndex,
+		DummyEmoji:      req.DummyEmoji,
 	}
 
 	if err := h.setTopicUseCase.Execute(c.Request().Context(), input); err != nil {

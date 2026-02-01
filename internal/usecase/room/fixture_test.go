@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/shooooooma415/guess-title-game-api/internal/domain/event"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/participant"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/room"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/theme"
@@ -152,4 +153,22 @@ func (m *mockParticipantRepository) Delete(ctx context.Context, roomID participa
 		return m.deleteFunc(ctx, roomID, userID)
 	}
 	return errors.New("not implemented")
+}
+
+// Mock Event Publisher
+type mockEventPublisher struct {
+	publishFunc   func(event.Event)
+	subscribeFunc func(string, event.EventHandler)
+}
+
+func (m *mockEventPublisher) Publish(evt event.Event) {
+	if m.publishFunc != nil {
+		m.publishFunc(evt)
+	}
+}
+
+func (m *mockEventPublisher) Subscribe(eventType string, handler event.EventHandler) {
+	if m.subscribeFunc != nil {
+		m.subscribeFunc(eventType, handler)
+	}
 }

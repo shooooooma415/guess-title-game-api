@@ -4,18 +4,40 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/labstack/echo/v4"
-	"github.com/shooooooma415/guess-title-game-api/internal/domain/participant"
-	"github.com/shooooooma415/guess-title-game-api/internal/domain/room"
-	"github.com/shooooooma415/guess-title-game-api/internal/domain/user"
+	"github.com/shooooooma415/guess-title-game-api/internal/domain/theme"
+	roomUseCase "github.com/shooooooma415/guess-title-game-api/internal/usecase/room"
 )
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		// Allow connections from localhost and local network
+		origin := r.Header.Get("Origin")
+		allowedOrigins := []string{
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"http://172.16.30.111:3000",
+			"http://172.16.30.111:3001",
+		}
+
+		if origin == "" {
+			return true
+		}
+
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				return true
+			}
+		}
+
+		return false
+	},
 }
 
 // Client represents a WebSocket client
@@ -111,27 +133,33 @@ func (h *Hub) Broadcast(roomID string, message Message) {
 
 // Handler handles WebSocket connections
 type Handler struct {
-	hub             *Hub
-	timer           *Timer
-	roomRepo        room.Repository
-	participantRepo participant.Repository
-	userRepo        user.Repository
+	hub                       *Hub
+	timer                     *Timer
+	fetchRoomUseCase          *roomUseCase.FetchRoomUseCase
+	fetchParticipantsUseCase  *roomUseCase.FetchRoomParticipantsUseCase
+	startDiscussionUseCase    *roomUseCase.StartDiscussionUseCase
+	submitFinalAnswerUseCase  *roomUseCase.SubmitFinalAnswerUseCase
+	themeRepo                 theme.Repository
 }
 
 // NewHandler creates a new WebSocket handler
 func NewHandler(
 	hub *Hub,
 	timer *Timer,
-	roomRepo room.Repository,
-	participantRepo participant.Repository,
-	userRepo user.Repository,
+	fetchRoomUseCase *roomUseCase.FetchRoomUseCase,
+	fetchParticipantsUseCase *roomUseCase.FetchRoomParticipantsUseCase,
+	startDiscussionUseCase *roomUseCase.StartDiscussionUseCase,
+	submitFinalAnswerUseCase *roomUseCase.SubmitFinalAnswerUseCase,
+	themeRepo theme.Repository,
 ) *Handler {
 	return &Handler{
-		hub:             hub,
-		timer:           timer,
-		roomRepo:        roomRepo,
-		participantRepo: participantRepo,
-		userRepo:        userRepo,
+		hub:                       hub,
+		timer:                     timer,
+		fetchRoomUseCase:          fetchRoomUseCase,
+		fetchParticipantsUseCase:  fetchParticipantsUseCase,
+		startDiscussionUseCase:    startDiscussionUseCase,
+		submitFinalAnswerUseCase:  submitFinalAnswerUseCase,
+		themeRepo:                 themeRepo,
 	}
 }
 
@@ -201,8 +229,11 @@ func (h *Handler) handleMessage(client *Client, data []byte) {
 	var msg Message
 	if err := json.Unmarshal(data, &msg); err != nil {
 		log.Printf("Error unmarshaling message: %v", err)
+		h.sendError(client, "INVALID_MESSAGE", "Invalid message format")
 		return
 	}
+
+	log.Printf("[WS RECEIVED] Type: %s, RoomID: %s, UserID: %s", msg.Type, client.roomID, client.userID)
 
 	switch msg.Type {
 	case MessageTypeClientConnected:
@@ -217,8 +248,13 @@ func (h *Handler) handleMessage(client *Client, data []byte) {
 	case MessageTypeAnswering:
 		h.handleAnswering(client, msg.Payload)
 
+	case "PING":
+		// Heartbeat message - just ignore, no response needed
+		// Client is checking if connection is alive
+
 	default:
 		log.Printf("Unknown message type: %s", msg.Type)
+		h.sendError(client, "UNKNOWN_MESSAGE_TYPE", "Unknown message type: "+string(msg.Type))
 	}
 }
 
@@ -228,10 +264,14 @@ func (h *Handler) handleClientConnected(client *Client, payload interface{}) {
 	var data ClientConnectedPayload
 	if err := json.Unmarshal(payloadBytes, &data); err != nil {
 		log.Printf("Error unmarshaling CLIENT_CONNECTED payload: %v", err)
+		h.sendError(client, "INVALID_PAYLOAD", "Invalid CLIENT_CONNECTED payload")
 		return
 	}
 
 	client.userID = data.UserID
+
+	// Send initial room state to the connected client
+	h.sendInitialRoomState(client)
 
 	// Broadcast participant update
 	h.broadcastParticipantUpdate(client.roomID)
@@ -244,55 +284,49 @@ func (h *Handler) handleFetchParticipants(client *Client) {
 
 // handleSubmitTopic handles SUBMIT_TOPIC message
 func (h *Handler) handleSubmitTopic(client *Client, payload interface{}) {
+	log.Printf("[WS SUBMIT_TOPIC] Received from client in room: %s", client.roomID)
 	payloadBytes, _ := json.Marshal(payload)
 	var data SubmitTopicPayload
 	if err := json.Unmarshal(payloadBytes, &data); err != nil {
 		log.Printf("Error unmarshaling SUBMIT_TOPIC payload: %v", err)
+		h.sendError(client, "INVALID_PAYLOAD", "Invalid SUBMIT_TOPIC payload")
 		return
 	}
+	log.Printf("[WS SUBMIT_TOPIC] Parsed payload - DisplayedEmojis: %d, OriginalEmojis: %d, DummyIndex: %d", len(data.DisplayedEmojis), len(data.OriginalEmojis), data.DummyIndex)
 
 	ctx := context.Background()
 
-	// Find room
-	roomID, err := room.NewRoomIDFromString(client.roomID)
+	// Execute use case to start discussion
+	input := roomUseCase.StartDiscussionInput{
+		RoomID:          client.roomID,
+		OriginalEmojis:  data.OriginalEmojis,
+		DisplayedEmojis: data.DisplayedEmojis,
+		DummyIndex:      data.DummyIndex,
+		DummyEmoji:      data.DummyEmoji,
+	}
+
+	if err := h.startDiscussionUseCase.Execute(ctx, input); err != nil {
+		log.Printf("Error starting discussion: %v", err)
+		h.sendError(client, "START_DISCUSSION_ERROR", err.Error())
+		return
+	}
+
+	// Fetch room for broadcasting
+	roomOutput, err := h.fetchRoomUseCase.Execute(ctx, roomUseCase.FetchRoomInput{
+		RoomID: client.roomID,
+	})
 	if err != nil {
-		log.Printf("Invalid room ID: %v", err)
+		log.Printf("Error fetching room: %v", err)
 		return
 	}
-
-	foundRoom, err := h.roomRepo.FindByID(ctx, roomID)
-	if err != nil {
-		log.Printf("Room not found: %v", err)
-		return
-	}
-
-	// Save game data
-	originalEmojis := room.NewEmojiList(data.OriginalEmojis)
-	displayedEmojis := room.NewEmojiList(data.DisplayedEmojis)
-	dummyIndex, _ := room.NewDummyIndex(data.DummyIndex)
-	dummyEmoji, _ := room.NewDummyEmoji(data.DummyEmoji)
-
-	foundRoom.SetGameData(
-		originalEmojis,
-		displayedEmojis,
-		dummyIndex,
-		dummyEmoji,
-	)
-
-	if err := h.roomRepo.Save(ctx, foundRoom); err != nil {
-		log.Printf("Error saving room: %v", err)
-		return
-	}
-
-	// Change status to discussing
-	foundRoom.ChangeStatus(room.StatusDiscussing)
-	h.roomRepo.Save(ctx, foundRoom)
+	foundRoom := roomOutput.Room
 
 	// Broadcast state update
 	topicStr := ""
 	if foundRoom.Topic() != nil {
 		topicStr = foundRoom.Topic().String()
 	}
+	log.Printf("[WS SUBMIT_TOPIC] Broadcasting topic: '%s'", topicStr)
 
 	var dummyIdxPtr *int
 	if foundRoom.DummyIndex() != nil {
@@ -345,45 +379,37 @@ func (h *Handler) handleAnswering(client *Client, payload interface{}) {
 	var data AnsweringPayload
 	if err := json.Unmarshal(payloadBytes, &data); err != nil {
 		log.Printf("Error unmarshaling ANSWERING payload: %v", err)
+		h.sendError(client, "INVALID_PAYLOAD", "Invalid ANSWERING payload")
 		return
 	}
 
 	ctx := context.Background()
 
-	// Find room
-	roomID, err := room.NewRoomIDFromString(client.roomID)
+	// Execute use case to submit final answer
+	input := roomUseCase.SubmitFinalAnswerInput{
+		RoomID:          client.roomID,
+		Answer:          data.Answer,
+		OriginalEmojis:  data.OriginalEmojis,
+		DisplayedEmojis: data.DisplayedEmojis,
+		DummyIndex:      data.DummyIndex,
+		DummyEmoji:      data.DummyEmoji,
+	}
+
+	if err := h.submitFinalAnswerUseCase.Execute(ctx, input); err != nil {
+		log.Printf("Error submitting final answer: %v", err)
+		h.sendError(client, "SUBMIT_ANSWER_ERROR", err.Error())
+		return
+	}
+
+	// Fetch room for broadcasting
+	roomOutput, err := h.fetchRoomUseCase.Execute(ctx, roomUseCase.FetchRoomInput{
+		RoomID: client.roomID,
+	})
 	if err != nil {
-		log.Printf("Invalid room ID: %v", err)
+		log.Printf("Error fetching room: %v", err)
 		return
 	}
-
-	foundRoom, err := h.roomRepo.FindByID(ctx, roomID)
-	if err != nil {
-		log.Printf("Room not found: %v", err)
-		return
-	}
-
-	// Save all data
-	answer, _ := room.NewAnswer(data.Answer)
-	foundRoom.SetAnswer(answer)
-
-	originalEmojis := room.NewEmojiList(data.OriginalEmojis)
-	displayedEmojis := room.NewEmojiList(data.DisplayedEmojis)
-	dummyIndex, _ := room.NewDummyIndex(data.DummyIndex)
-	dummyEmoji, _ := room.NewDummyEmoji(data.DummyEmoji)
-
-	foundRoom.SetGameData(
-		originalEmojis,
-		displayedEmojis,
-		dummyIndex,
-		dummyEmoji,
-	)
-	foundRoom.ChangeStatus(room.StatusChecking)
-
-	if err := h.roomRepo.Save(ctx, foundRoom); err != nil {
-		log.Printf("Error saving room: %v", err)
-		return
-	}
+	foundRoom := roomOutput.Room
 
 	// Broadcast state update to checking
 	topicStr := ""
@@ -402,19 +428,19 @@ func (h *Handler) handleAnswering(client *Client, payload interface{}) {
 		dummyEmojiStr = foundRoom.DummyEmoji().String()
 	}
 
-	displayedEmojisSlice2 := []string{}
+	displayedEmojisSlice := []string{}
 	if foundRoom.DisplayedEmojis() != nil {
-		displayedEmojisSlice2 = foundRoom.DisplayedEmojis().Values()
+		displayedEmojisSlice = foundRoom.DisplayedEmojis().Values()
 	}
 
-	originalEmojisSlice2 := []string{}
+	originalEmojisSlice := []string{}
 	if foundRoom.OriginalEmojis() != nil {
-		originalEmojisSlice2 = foundRoom.OriginalEmojis().Values()
+		originalEmojisSlice = foundRoom.OriginalEmojis().Values()
 	}
 
-	assignmentsSlice2 := []string{}
+	assignmentsSlice := []string{}
 	if foundRoom.Assignments() != nil {
-		assignmentsSlice2 = foundRoom.Assignments().Values()
+		assignmentsSlice = foundRoom.Assignments().Values()
 	}
 
 	h.hub.Broadcast(client.roomID, Message{
@@ -423,46 +449,64 @@ func (h *Handler) handleAnswering(client *Client, payload interface{}) {
 			NextState: "checking",
 			Data: &StateUpdateDataPayload{
 				Topic:           topicStr,
-				DisplayedEmojis: displayedEmojisSlice2,
-				OriginalEmojis:  originalEmojisSlice2,
+				DisplayedEmojis: displayedEmojisSlice,
+				OriginalEmojis:  originalEmojisSlice,
 				DummyIndex:      dummyIdxPtr,
 				DummyEmoji:      dummyEmojiStr,
-				Assignments:     assignmentsSlice2,
+				Assignments:     assignmentsSlice,
 			},
 		},
 	})
+
+	// Stop timer when transitioning to checking phase
+	h.timer.StopTimer(client.roomID)
+}
+
+// sendError sends an error message to a specific client
+func (h *Handler) sendError(client *Client, code string, message string) {
+	errorMsg := Message{
+		Type: MessageTypeError,
+		Payload: ErrorPayload{
+			Code:    code,
+			Message: message,
+		},
+	}
+	data, err := json.Marshal(errorMsg)
+	if err != nil {
+		log.Printf("Error marshaling error message: %v", err)
+		return
+	}
+
+	select {
+	case client.send <- data:
+	default:
+		log.Printf("Failed to send error message to client")
+	}
 }
 
 // broadcastParticipantUpdate broadcasts participant list to all clients in a room
 func (h *Handler) broadcastParticipantUpdate(roomID string) {
 	ctx := context.Background()
 
-	participantRoomID, err := participant.NewRoomIDFromString(roomID)
-	if err != nil {
-		log.Printf("Invalid room ID: %v", err)
-		return
+	// Execute use case to fetch participants
+	input := roomUseCase.FetchRoomParticipantsInput{
+		RoomID: roomID,
 	}
 
-	participants, err := h.participantRepo.FindByRoomID(ctx, participantRoomID)
+	output, err := h.fetchParticipantsUseCase.Execute(ctx, input)
 	if err != nil {
 		log.Printf("Error fetching participants: %v", err)
 		return
 	}
 
+	// Convert to WebSocket payload format
 	participantDataList := []ParticipantData{}
-	for _, p := range participants {
-		// Fetch user info
-		u, err := h.userRepo.FindByID(ctx, user.UserID{})
-		userName := "Unknown"
-		if err == nil {
-			userName = u.Name().String()
-		}
-
+	for _, p := range output.Participants {
 		participantDataList = append(participantDataList, ParticipantData{
-			UserID:   p.UserID().String(),
-			UserName: userName,
-			Role:     p.Role().String(),
-			IsLeader: p.IsLeader(),
+			UserID:   p.UserID,
+			UserName: p.UserName,
+			Role:     p.Role,
+			IsLeader: p.IsLeader,
 		})
 	}
 
@@ -472,4 +516,82 @@ func (h *Handler) broadcastParticipantUpdate(roomID string) {
 			Participants: participantDataList,
 		},
 	})
+}
+
+// sendInitialRoomState sends the current room state to a newly connected client
+func (h *Handler) sendInitialRoomState(client *Client) {
+	ctx := context.Background()
+
+	// Fetch room using UseCase
+	roomOutput, err := h.fetchRoomUseCase.Execute(ctx, roomUseCase.FetchRoomInput{
+		RoomID: client.roomID,
+	})
+	if err != nil {
+		log.Printf("Error fetching room for initial state: %v", err)
+		h.sendError(client, "FETCH_ROOM_ERROR", "Failed to fetch room state")
+		return
+	}
+
+	foundRoom := roomOutput.Room
+
+	// Build state data payload
+	topicStr := ""
+	if foundRoom.Topic() != nil {
+		topicStr = foundRoom.Topic().String()
+	}
+
+	var dummyIdxPtr *int
+	if foundRoom.DummyIndex() != nil {
+		val := foundRoom.DummyIndex().Value()
+		dummyIdxPtr = &val
+	}
+
+	dummyEmojiStr := ""
+	if foundRoom.DummyEmoji() != nil {
+		dummyEmojiStr = foundRoom.DummyEmoji().String()
+	}
+
+	displayedEmojisSlice := []string{}
+	if foundRoom.DisplayedEmojis() != nil {
+		displayedEmojisSlice = foundRoom.DisplayedEmojis().Values()
+	}
+
+	originalEmojisSlice := []string{}
+	if foundRoom.OriginalEmojis() != nil {
+		originalEmojisSlice = foundRoom.OriginalEmojis().Values()
+	}
+
+	assignmentsSlice := []string{}
+	if foundRoom.Assignments() != nil {
+		assignmentsSlice = foundRoom.Assignments().Values()
+	}
+
+	// Create state update message with current room status
+	stateMsg := Message{
+		Type: MessageTypeStateUpdate,
+		Payload: StateUpdatePayload{
+			NextState: foundRoom.Status().String(),
+			Data: &StateUpdateDataPayload{
+				Topic:           topicStr,
+				DisplayedEmojis: displayedEmojisSlice,
+				OriginalEmojis:  originalEmojisSlice,
+				DummyIndex:      dummyIdxPtr,
+				DummyEmoji:      dummyEmojiStr,
+				Assignments:     assignmentsSlice,
+			},
+		},
+	}
+
+	// Send state to the specific client
+	data, err := json.Marshal(stateMsg)
+	if err != nil {
+		log.Printf("Error marshaling initial state message: %v", err)
+		return
+	}
+
+	select {
+	case client.send <- data:
+	default:
+		log.Printf("Failed to send initial state to client")
+	}
 }

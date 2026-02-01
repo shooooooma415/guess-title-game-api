@@ -54,7 +54,9 @@ type StateUpdatePayload struct {
 
 // StateUpdateDataPayload represents the data in STATE_UPDATE
 type StateUpdateDataPayload struct {
+	Theme           string   `json:"theme,omitempty"`
 	Topic           string   `json:"topic,omitempty"`
+	Answer          string   `json:"answer,omitempty"`
 	DisplayedEmojis []string `json:"displayedEmojis,omitempty"`
 	OriginalEmojis  []string `json:"originalEmojis,omitempty"`
 	DummyIndex      *int     `json:"dummyIndex,omitempty"`

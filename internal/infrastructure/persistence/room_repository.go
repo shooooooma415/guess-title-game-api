@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"github.com/lib/pq"
 	"github.com/shooooooma415/guess-title-game-api/internal/domain/room"
@@ -44,6 +45,9 @@ func (r *RoomRepository) Save(ctx context.Context, rm *room.Room) error {
 	var topicStr, answerStr interface{}
 	if rm.Topic() != nil {
 		topicStr = rm.Topic().String()
+		fmt.Printf("[RoomRepository.Save] Topic is not nil: '%s'\n", topicStr)
+	} else {
+		fmt.Printf("[RoomRepository.Save] Topic is nil\n")
 	}
 	if rm.Answer() != nil {
 		answerStr = rm.Answer().String()
@@ -72,6 +76,15 @@ func (r *RoomRepository) Save(ctx context.Context, rm *room.Room) error {
 		assignments = rm.Assignments().Values()
 	}
 
+	fmt.Printf("[RoomRepository.Save] Executing SQL with params:\n")
+	fmt.Printf("  ID: %s\n", rm.ID().String())
+	fmt.Printf("  Code: %s\n", rm.Code().String())
+	fmt.Printf("  ThemeID: %s\n", rm.ThemeID().String())
+	fmt.Printf("  Topic: %v (type: %T)\n", topicStr, topicStr)
+	fmt.Printf("  Answer: %v (type: %T)\n", answerStr, answerStr)
+	fmt.Printf("  Status: %s\n", rm.Status().String())
+	fmt.Printf("  HostUserID: %s\n", rm.HostUserID().String())
+
 	_, err := r.db.ExecContext(
 		ctx,
 		query,
@@ -90,6 +103,12 @@ func (r *RoomRepository) Save(ctx context.Context, rm *room.Room) error {
 		dummyEmoji,
 		pq.Array(assignments),
 	)
+
+	if err != nil {
+		fmt.Printf("[RoomRepository.Save] SQL execution failed: %v\n", err)
+	} else {
+		fmt.Printf("[RoomRepository.Save] SQL execution succeeded\n")
+	}
 
 	return err
 }
@@ -153,6 +172,12 @@ func (r *RoomRepository) scanRoom(ctx context.Context, query string, arg interfa
 		return nil, err
 	}
 
+	fmt.Printf("[RoomRepository.scanRoom] Scanned from DB:\n")
+	fmt.Printf("  ID: %s\n", id)
+	fmt.Printf("  Topic Valid: %v, Topic Value: '%s'\n", topic.Valid, topic.String)
+	fmt.Printf("  Answer Valid: %v, Answer Value: '%s'\n", answer.Valid, answer.String)
+	fmt.Printf("  Status: %s\n", status)
+
 	roomID, _ := room.NewRoomIDFromString(id)
 	roomCode, _ := room.NewRoomCodeFromString(code)
 	roomThemeID, _ := room.NewThemeIDFromString(themeID)
@@ -162,7 +187,7 @@ func (r *RoomRepository) scanRoom(ctx context.Context, query string, arg interfa
 
 	if topic.Valid {
 		if t, err := room.NewTopic(topic.String); err == nil {
-			rm.SetTopic(t)
+			rm.SetTopicUnchecked(&t)
 		}
 	}
 	if answer.Valid {
@@ -172,7 +197,7 @@ func (r *RoomRepository) scanRoom(ctx context.Context, query string, arg interfa
 	}
 
 	roomStatus, _ := room.NewRoomStatusFromString(status)
-	rm.ChangeStatus(roomStatus)
+	rm.SetStatus(roomStatus) // Use SetStatus instead of ChangeStatus to bypass validation when reconstructing from DB
 
 	if len(originalEmojis) > 0 && len(displayedEmojis) > 0 && dummyIndex.Valid {
 		origEmojis := room.NewEmojiList(originalEmojis)

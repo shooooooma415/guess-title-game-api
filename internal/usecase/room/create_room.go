@@ -85,7 +85,7 @@ func (uc *CreateRoomUseCase) Execute(ctx context.Context) (*CreateRoomOutput, er
 		participantUserID,
 		participant.RoleHost,
 	)
-	hostParticipant.SetAsLeader()
+	// ホストはLeaderではない。最初に参加したPlayerがLeaderになる
 
 	if err := uc.participantRepo.Save(ctx, hostParticipant); err != nil {
 		return nil, err

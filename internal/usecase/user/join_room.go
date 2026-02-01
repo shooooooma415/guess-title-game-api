@@ -75,16 +75,23 @@ func (uc *JoinRoomUseCase) Execute(ctx context.Context, input JoinRoomInput) (*J
 		return nil, err
 	}
 
-	// Check if this is the first participant
-	existingParticipants, err := uc.participantRepo.FindByRoomID(ctx, participant.RoomID{})
+	// Check if this is the first non-host participant (first joiner becomes Leader)
+	participantRoomID, _ := participant.NewRoomIDFromString(foundRoom.ID().String())
+	existingParticipants, err := uc.participantRepo.FindByRoomID(ctx, participantRoomID)
 	if err != nil {
 		existingParticipants = []*participant.Participant{}
 	}
-	isLeader := len(existingParticipants) == 0
+	// Count only non-host participants to determine if this is the first joiner
+	nonHostCount := 0
+	for _, p := range existingParticipants {
+		if p.Role() != participant.RoleHost {
+			nonHostCount++
+		}
+	}
+	isLeader := nonHostCount == 0
 
 	// Create participant
 	participantID := participant.NewParticipantID()
-	participantRoomID, _ := participant.NewRoomIDFromString(foundRoom.ID().String())
 	participantUserID, _ := participant.NewUserIDFromString(userID.String())
 	role := participant.RolePlayer
 
