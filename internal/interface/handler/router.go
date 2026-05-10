@@ -25,7 +25,7 @@ func NewRouter(
 	// Health check
 	e.GET("/health", healthCheck)
 
-	// WebSocket endpoint
+	// WebSocket endpoint (legacy query-param style)
 	e.GET("/ws", wsHandler.HandleWebSocket)
 
 	// API routes
@@ -33,6 +33,9 @@ func NewRouter(
 	{
 		// User routes
 		api.POST("/user", userHandler.JoinRoom)
+
+		// WebSocket endpoint (path-param style, used by frontend)
+		api.GET("/rooms/:room_id/ws", wsHandler.HandleWebSocket)
 
 		// Room routes
 		api.POST("/rooms", roomHandler.CreateRoom)

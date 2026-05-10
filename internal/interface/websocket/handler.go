@@ -165,7 +165,10 @@ func NewHandler(
 
 // HandleWebSocket handles WebSocket connections
 func (h *Handler) HandleWebSocket(c echo.Context) error {
-	roomID := c.QueryParam("room_id")
+	roomID := c.Param("room_id")
+	if roomID == "" {
+		roomID = c.QueryParam("room_id")
+	}
 	if roomID == "" {
 		return echo.NewHTTPError(400, "room_id is required")
 	}
