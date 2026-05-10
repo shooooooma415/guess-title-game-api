@@ -62,7 +62,7 @@ func (h *RoomHandler) CreateRoom(c echo.Context) error {
 		Hint:     output.Hint,
 	}
 
-	return c.JSON(http.StatusOK, response)
+	return c.JSON(http.StatusCreated, response)
 }
 
 // StartGameRequest represents the request body for starting a game
