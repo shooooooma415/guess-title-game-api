@@ -13,33 +13,6 @@ import (
 	roomUseCase "github.com/shooooooma415/guess-title-game-api/internal/usecase/room"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		// Allow connections from localhost and local network
-		origin := r.Header.Get("Origin")
-		allowedOrigins := []string{
-			"http://localhost:3000",
-			"http://localhost:3001",
-			"http://172.16.30.111:3000",
-			"http://172.16.30.111:3001",
-		}
-
-		if origin == "" {
-			return true
-		}
-
-		for _, allowed := range allowedOrigins {
-			if origin == allowed {
-				return true
-			}
-		}
-
-		return false
-	},
-}
-
 // Client represents a WebSocket client
 type Client struct {
 	conn   *websocket.Conn
@@ -135,6 +108,7 @@ func (h *Hub) Broadcast(roomID string, message Message) {
 type Handler struct {
 	hub                       *Hub
 	timer                     *Timer
+	upgrader                  websocket.Upgrader
 	fetchRoomUseCase          *roomUseCase.FetchRoomUseCase
 	fetchParticipantsUseCase  *roomUseCase.FetchRoomParticipantsUseCase
 	startDiscussionUseCase    *roomUseCase.StartDiscussionUseCase
@@ -151,15 +125,31 @@ func NewHandler(
 	startDiscussionUseCase *roomUseCase.StartDiscussionUseCase,
 	submitFinalAnswerUseCase *roomUseCase.SubmitFinalAnswerUseCase,
 	themeRepo theme.Repository,
+	allowedOrigins []string,
 ) *Handler {
+	originSet := make(map[string]bool, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		originSet[o] = true
+	}
 	return &Handler{
-		hub:                       hub,
-		timer:                     timer,
-		fetchRoomUseCase:          fetchRoomUseCase,
-		fetchParticipantsUseCase:  fetchParticipantsUseCase,
-		startDiscussionUseCase:    startDiscussionUseCase,
-		submitFinalAnswerUseCase:  submitFinalAnswerUseCase,
-		themeRepo:                 themeRepo,
+		hub:   hub,
+		timer: timer,
+		upgrader: websocket.Upgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true
+				}
+				return originSet[origin]
+			},
+		},
+		fetchRoomUseCase:         fetchRoomUseCase,
+		fetchParticipantsUseCase: fetchParticipantsUseCase,
+		startDiscussionUseCase:   startDiscussionUseCase,
+		submitFinalAnswerUseCase: submitFinalAnswerUseCase,
+		themeRepo:                themeRepo,
 	}
 }
 
@@ -173,7 +163,7 @@ func (h *Handler) HandleWebSocket(c echo.Context) error {
 		return echo.NewHTTPError(400, "room_id is required")
 	}
 
-	conn, err := upgrader.Upgrade(c.Response(), c.Request(), nil)
+	conn, err := h.upgrader.Upgrade(c.Response(), c.Request(), nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
 		return err

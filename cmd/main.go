@@ -82,6 +82,7 @@ func main() {
 		startDiscussionUseCase,
 		submitFinalAnswerUseCase,
 		themeRepo,
+		cfg.CORS.AllowOrigins,
 	)
 
 	// Start WebSocket hub

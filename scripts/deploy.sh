@@ -56,23 +56,34 @@ gcloud builds submit --tag gcr.io/$PROJECT_ID/$SERVICE_NAME
 
 # Cloud Runにデプロイ
 echo -e "${GREEN}[4/4] Cloud Runにデプロイ中...${NC}"
+CORS_ORIGINS="${CORS_ALLOW_ORIGINS:-http://localhost:3000,https://guess-title.vercel.app}"
+
+TMPENV=$(mktemp /tmp/env-vars-XXXXXX.yaml)
+cat > "$TMPENV" << EOF
+ENV: "production"
+DB_HOST: "/cloudsql/${DB_CONNECTION_NAME}"
+DB_USER: "postgres"
+DB_NAME: "guess_title_game"
+DB_SSL_MODE: "disable"
+CORS_ALLOW_ORIGINS: "${CORS_ORIGINS}"
+EOF
+
 gcloud run deploy $SERVICE_NAME \
   --image gcr.io/$PROJECT_ID/$SERVICE_NAME \
   --platform managed \
   --region $REGION \
   --allow-unauthenticated \
   --add-cloudsql-instances $DB_CONNECTION_NAME \
-  --set-env-vars "ENV=production" \
-  --set-env-vars "DB_HOST=/cloudsql/$DB_CONNECTION_NAME" \
-  --set-env-vars "DB_USER=postgres" \
-  --set-env-vars "DB_NAME=guess_title_game" \
-  --set-env-vars "DB_SSL_MODE=disable" \
+  --env-vars-file "$TMPENV" \
   --set-secrets "DB_PASSWORD=DB_PASSWORD:latest" \
   --min-instances 0 \
   --max-instances 10 \
   --memory 512Mi \
   --cpu 1 \
-  --timeout 300
+  --timeout 300 \
+  --session-affinity
+
+rm -f "$TMPENV"
 
 echo -e "${GREEN}デプロイ完了！${NC}"
 
